@@ -38,13 +38,30 @@ the app works offline thereafter. GM may switch deck at setup.
 
 ## Roles
 
-| Role | Route | Sees hidden objectives? | Can act? |
-|------|-------|------------------------|----------|
-| Game Master | `/gm` (PIN-gated) | **Yes** | Full control: setup, reveal, injects, consultants, notes, reset |
-| Player (Defender) | `/` | No (locked backs until revealed) | Pick procedure + roll d20 |
-| Viewer | `/` (choose Viewer) | No | Read-only spectator |
+| Role | Route | Sees hidden objectives? | Can act? | Capacity |
+|------|-------|------------------------|----------|----------|
+| Game Master | `/gm` (PIN-gated) | **Yes** | Full control: setup, reveal, injects, consultants, notes, reset, config | **max 2** |
+| Player (Defender) | `/` | No (locked backs until revealed) | Pick procedure + roll d20 | **3–5 (one team)** |
+| Viewer | `/` (choose Viewer) | No | Read-only spectator | unlimited |
 
 PIN is a server-side env/config value (default printed at startup). Wrong PIN ⇒ no GM socket.
+
+### Capacity enforcement (server-authoritative)
+
+The server counts connected sockets per role and enforces caps on `join`:
+
+- **Game Masters: hard cap 2.** A 3rd GM `join` is rejected with an error ("Both Game Master
+  seats are taken"); that person must join as Player or Viewer. The role picker disables the
+  GM option (with a "2/2 taken" note) once full, driven by the live counts in the broadcast
+  state.
+- **Players (Defenders): cap 5, one shared team.** A 6th player `join` is rejected and the
+  picker disables Player ("team full 5/5"); they may join as Viewer.
+- **Players: soft minimum 3.** Below 3 connected players, the GM **Start** button shows a
+  "Need 3+ players (currently N)" warning. Not a hard block — a GM may override to start
+  (supports solo testing / demos). The override is logged.
+- **Viewers: unlimited.**
+- On disconnect the counts decrement and freed seats re-open in everyone's picker. Live
+  `{ gm, player, viewer }` counts are part of every state broadcast.
 
 ## Architecture
 
@@ -67,7 +84,8 @@ GameState {
   deck: string                        // e.g. "CoreV3.1"
   phase: "setup" | "playing" | "won" | "lost"
   config: { turnLimit: 10, establishedThreshold: 11, unestablishedThreshold: 17,
-            injectNudgeAfterFails: 3 }
+            injectNudgeAfterFails: 3 }   // GM-editable; these are the defaults
+  capacity: { gm: 2, playerMin: 3, playerMax: 5 }   // role caps; gm/playerMax hard, playerMin soft
   objective: { initial, pivot, c2, persist }   // card ids — GM-only, redacted for others
   revealed:  { initial:bool, pivot:bool, c2:bool, persist:bool }
   established: [procCardId x4]         // visible to all
@@ -89,7 +107,9 @@ are shown).
 1. **Setup (GM):** choose deck; pick attack chain — one each of initial/pivot/c2/persist
    (Random or hand-pick from a builder). Deal 4 random Procedures as **Established**
    (success ≥ 11). All other procedures usable but **not Established** (success ≥ 17).
-   Optional Starting Condition inject. GM presses **Start**.
+   Optional Starting Condition inject. A **GM config panel** exposes editable `turnLimit`
+   (default 10), `establishedThreshold` (default 11), `unestablishedThreshold` (default 17),
+   and `injectNudgeAfterFails` (default 3); edits broadcast to all. GM presses **Start**.
 2. **Turn (Defender):** pick a Procedure, roll d20 (server rolls authoritatively). GM may set
    a `±modifier` to apply special card rules. Server computes `total = d20 + modifier`,
    `success = total ≥ threshold(procedure)`, broadcasts the roll, increments `turn`.
@@ -131,7 +151,9 @@ backdoors-and-breaches/
 
 - **Unit (node:test):** redaction (player projection never contains hidden objective ids),
   roll resolution (thresholds, modifier, success/fail, consecutiveFails reset), win/lose
-  transitions, role-permission guards (defender reveal rejected, viewer roll rejected).
+  transitions, role-permission guards (defender reveal rejected, viewer roll rejected),
+  capacity caps (3rd GM rejected, 6th player rejected, viewers unlimited, seats re-open on
+  disconnect), and GM config edits (turnLimit/threshold changes affect resolution).
 - **Manual:** start server, open `/gm` (PIN) + two `/` tabs (player+viewer); run a full game;
   confirm players see locked backs that flip only on GM reveal, dice broadcast live, win/lose
   fire correctly.
