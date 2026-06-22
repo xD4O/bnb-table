@@ -43,6 +43,7 @@
         <div class="brand">B&amp;B <span id="deck-name"></span></div>
         <div id="trackers">
           <span class="track" id="t-turn">Turn —</span>
+          <span class="track" id="t-left">⏳ — left</span>
           <span class="track ok" id="t-succ">Detected 0/4</span>
           <span class="track bad" id="t-fail">Failures 0</span>
           <span class="track" id="t-phase">Setup</span>
@@ -61,8 +62,8 @@
 
       <div class="columns">
         <section id="procedures-sec">
-          <h2>Established Procedures <small>(+ all detections)</small></h2>
-          <div class="proc-row" id="established-row"></div>
+          <h2>Procedures <small>(established are highlighted · click any card to enlarge)</small></h2>
+          <div class="proc-row" id="procedures-row"></div>
 
           <div id="roll-controls" hidden>
             <h3>Run a Procedure</h3>
@@ -84,6 +85,12 @@
           </section>
         </aside>
       </div>
+    </div>
+
+    <!-- Card lightbox: any card with [data-full] opens here enlarged -->
+    <div id="lightbox" class="lb" hidden>
+      <button id="lb-close" aria-label="Close">✕</button>
+      <img id="lb-img" alt="card" />
     </div>
 
     <script type="module" src="/app.js"></script>

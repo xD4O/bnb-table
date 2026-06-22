@@ -94,6 +94,10 @@ function render() {
   const s = state;
   $("deck-name").textContent = s.deck || "";
   $("t-turn").textContent = `Turn ${s.turn}/${s.config.turnLimit}`;
+  const left = Math.max(0, s.config.turnLimit - s.turn);
+  const lt = $("t-left");
+  lt.textContent = s.phase === "playing" ? `⏳ ${left} turn${left === 1 ? "" : "s"} left` : `⏳ limit ${s.config.turnLimit}`;
+  lt.className = "track" + (s.phase === "playing" && left <= 2 ? " low" : s.phase === "playing" ? " ok" : "");
   $("t-succ").textContent = `Detected ${s.successes}/4`;
   $("t-fail").textContent = `Failures ${s.failures}`;
   $("t-phase").textContent = ({ setup: "Setup", playing: "In progress", won: "Defenders win", lost: "Attackers win" })[s.phase];
@@ -101,7 +105,7 @@ function render() {
   renderBanner();
   renderSlots();
   renderLastRoll();
-  renderEstablished();
+  renderProcedures();
   renderRollControls();
   renderPlayed();
   renderLog();
@@ -135,7 +139,7 @@ function renderSlots() {
     }
     div.innerHTML =
       `<div class="label">${SLOT_LABEL[slot]}</div>` +
-      `<img src="${img}" alt="${slot}" />` +
+      `<img src="${img}" alt="${slot}"${o.locked ? "" : ` data-full="${img}"`} />` +
       (o.locked ? `<div class="lockbadge">🔒</div>` : "");
     if (isGm && state.phase === "playing" && !state.revealed[slot]) {
       const btn = document.createElement("button");
@@ -160,13 +164,22 @@ function renderLastRoll() {
     `${r.success ? "SUCCESS" : "no detection"}</div></div>`;
 }
 
-function renderEstablished() {
-  const row = $("established-row");
+// All procedures (established highlighted + non-established shown), with cooldown overlay.
+function renderProcedures() {
+  const row = $("procedures-row");
+  const estIds = new Set(state.established.map((c) => c.id));
   row.innerHTML = "";
-  for (const c of state.established) {
-    const img = document.createElement("img");
-    img.className = "thumb est"; img.src = assetUrl(c.image); img.title = c.name;
-    row.appendChild(img);
+  for (const c of state.procedures) {
+    const cool = state.cooldowns?.[c.id] || 0;
+    const est = estIds.has(c.id);
+    const wrap = document.createElement("div");
+    wrap.className = "proc-card" + (cool ? " cooling" : "");
+    const src = assetUrl(c.image);
+    wrap.innerHTML =
+      `<img class="thumb${est ? " est" : ""}" src="${src}" data-full="${src}" title="${c.name}${est ? " (established)" : ""}" />` +
+      (est ? `<span class="est-tag">EST</span>` : "") +
+      (cool ? `<span class="cd-badge"><span class="snow">❄</span><span class="cd-n">${cool}</span></span>` : "");
+    row.appendChild(wrap);
   }
 }
 
@@ -180,18 +193,28 @@ function renderRollControls() {
   const prev = sel.value;
   sel.innerHTML = "";
   for (const c of state.procedures) {
+    const cool = state.cooldowns?.[c.id] || 0;
     const opt = document.createElement("option");
     opt.value = c.id;
-    opt.textContent = `${c.name}${estIds.has(c.id) ? "  (established +)" : ""}`;
+    opt.disabled = cool > 0;
+    opt.textContent =
+      `${c.name}${estIds.has(c.id) ? " (established +)" : ""}` + (cool ? ` ❄ cooldown ${cool}` : "");
     sel.appendChild(opt);
   }
-  if (prev) sel.value = prev;
+  // keep previous selection if still rollable, else jump to first available option
+  if (prev && !state.cooldowns?.[prev]) sel.value = prev;
+  if (sel.selectedOptions[0]?.disabled) {
+    const firstOpen = [...sel.options].find((o) => !o.disabled);
+    if (firstOpen) sel.value = firstOpen.value;
+  }
   $("roll-btn").onclick = () =>
     send({ type: "roll", procedureId: sel.value, modifier: Number($("modifier").value) || 0 });
 }
 
 function strip(cards) {
-  return cards.map((c) => `<img class="thumb" src="${assetUrl(c.image)}" title="${c.name}" />`).join("");
+  return cards
+    .map((c) => { const s = assetUrl(c.image); return `<img class="thumb" src="${s}" data-full="${s}" title="${c.name}" />`; })
+    .join("");
 }
 
 function renderPlayed() {
@@ -246,7 +269,9 @@ function renderGmPanel() {
       <label>Established ≥<input type="number" id="cfg-establishedThreshold" value="${s.config.establishedThreshold}"/></label>
       <label>Not-est ≥<input type="number" id="cfg-unestablishedThreshold" value="${s.config.unestablishedThreshold}"/></label>
       <label>Inject nudge<input type="number" id="cfg-injectNudgeAfterFails" value="${s.config.injectNudgeAfterFails}"/></label>
-      <button class="gm-btn" id="gm-cfg">Save rules</button></div></div>`;
+      <label>Cooldown turns<input type="number" id="cfg-cooldownTurns" min="0" value="${s.config.cooldownTurns}"/></label>
+      <button class="gm-btn" id="gm-cfg">Save rules</button></div>
+      <p class="warn">Cooldown: a procedure can't be re-rolled for this many turns (0 = off).</p></div>`;
 
     const few = s.counts.player < s.capacity.playerMin;
     html += `<div class="gm-block"><h3>4 · Start</h3>`;
@@ -261,7 +286,8 @@ function renderGmPanel() {
     html += `<div class="gm-block"><h3>Note to the table</h3><div class="gm-row">
       <input id="gm-note" placeholder="Narrate something…" style="flex:1"/><button class="gm-btn" id="gm-add-note">Post</button></div>
       <div class="gm-row"><label>Turn limit<input type="number" id="cfg2-turnLimit" value="${s.config.turnLimit}"/></label>
-      <button class="gm-btn" id="gm-cfg2">Update limit</button></div></div>`;
+      <label>Cooldown turns<input type="number" id="cfg2-cooldownTurns" min="0" value="${s.config.cooldownTurns}"/></label>
+      <button class="gm-btn" id="gm-cfg2">Update rules</button></div></div>`;
     html += `<div class="gm-block"><button class="gm-btn danger" id="gm-reset">↺ Reset game</button></div>`;
   }
   panel.innerHTML = html;
@@ -279,7 +305,7 @@ function wireGmPanel() {
     send({ type: "setup", deck: $("gm-deck").value, objective, established });
   });
   click("gm-cfg", () => send({ type: "config", config: readCfg("cfg-") }));
-  click("gm-cfg2", () => send({ type: "config", config: { turnLimit: Number($("cfg2-turnLimit").value) } }));
+  click("gm-cfg2", () => send({ type: "config", config: readCfg("cfg2-") }));
   click("gm-start", () => send({ type: "start", force: $("gm-force")?.checked }));
   click("gm-play-inject", () => send({ type: "playInject", cardId: $("gm-inject").value }));
   click("gm-play-consultant", () => send({ type: "playConsultant", cardId: $("gm-consultant").value }));
@@ -288,13 +314,28 @@ function wireGmPanel() {
 }
 
 function readCfg(prefix) {
-  const keys = ["turnLimit", "establishedThreshold", "unestablishedThreshold", "injectNudgeAfterFails"];
+  const keys = ["turnLimit", "establishedThreshold", "unestablishedThreshold", "injectNudgeAfterFails", "cooldownTurns"];
   const out = {};
   for (const k of keys) { const el = $(prefix + k); if (el) out[k] = Number(el.value); }
   return out;
 }
 
+// ---- lightbox (click any [data-full] card to enlarge) ----------------------
+
+function setupLightbox() {
+  const lb = $("lightbox"), img = $("lb-img");
+  const open = (src) => { img.src = src; lb.hidden = false; };
+  const close = () => { lb.hidden = true; img.src = ""; };
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-full]");
+    if (t) { open(t.getAttribute("data-full")); return; }
+  });
+  lb.addEventListener("click", close); // click backdrop or close button
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+}
+
 // ---- boot ------------------------------------------------------------------
 
 setupJoin();
+setupLightbox();
 connect();

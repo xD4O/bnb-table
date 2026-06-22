@@ -84,6 +84,7 @@ test("revealed objective slot becomes visible to players", () => {
 test("roll: established success at threshold, modifier applied, consecutiveFails resets", () => {
   const game = makeGame([10, 8]); // first die 10, second die 8
   startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1"); // isolate from cooldown
   // established threshold 11. die 10 + modifier 0 = 10 -> FAIL
   let r = game.roll({ connId: "p0", procedureId: "procedure-1", modifier: 0 });
   assert.equal(r.ok, true);
@@ -101,6 +102,7 @@ test("roll: established success at threshold, modifier applied, consecutiveFails
 test("not-established procedure uses the 17 threshold", () => {
   const game = makeGame([16, 17]);
   startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1"); // isolate from cooldown
   // procedure-5 is NOT established. die 16 -> fail (needs 17)
   game.roll({ connId: "p0", procedureId: "procedure-5" });
   assert.equal(game.state.lastRoll.success, false);
@@ -115,6 +117,48 @@ test("GM config edits change roll thresholds", () => {
   game.setConfig({ establishedThreshold: 15 }, "gm1");
   game.roll({ connId: "p0", procedureId: "procedure-1" }); // die 15 >= 15 -> success
   assert.equal(game.state.lastRoll.success, true);
+});
+
+// --- cooldown house-rule ---------------------------------------------------
+
+test("rolling a procedure puts it on cooldown for N turns", () => {
+  const game = makeGame([5, 5, 5]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 1 }, "gm1");
+  const r1 = game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(r1.ok, true);
+  // immediate re-roll of the same procedure is blocked
+  const r2 = game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(r2.ok, false);
+  assert.match(r2.error, /cooldown/i);
+  assert.equal(game.state.turn, 1); // blocked roll did not consume a turn
+  // a different procedure still works and advances the turn
+  const r3 = game.roll({ connId: "p0", procedureId: "procedure-2" });
+  assert.equal(r3.ok, true);
+  assert.equal(game.state.turn, 2);
+  // now procedure-1 has cooled down
+  const r4 = game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(r4.ok, true);
+  assert.equal(game.state.turn, 3);
+});
+
+test("cooldownTurns 0 disables the cooldown rule", () => {
+  const game = makeGame([5, 5]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  assert.equal(game.roll({ connId: "p0", procedureId: "procedure-1" }).ok, true);
+  assert.equal(game.roll({ connId: "p0", procedureId: "procedure-1" }).ok, true);
+  assert.equal(game.state.turn, 2);
+});
+
+test("projection reports remaining cooldown turns per procedure", () => {
+  const game = makeGame([5, 5]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 2 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(game.project("player").cooldowns["procedure-1"], 2);
+  game.roll({ connId: "p0", procedureId: "procedure-2" });
+  assert.equal(game.project("player").cooldowns["procedure-1"], 1);
 });
 
 // --- win / lose ------------------------------------------------------------
@@ -133,7 +177,7 @@ test("revealing all 4 attack cards wins the game", () => {
 test("reaching the turn limit without all 4 revealed loses", () => {
   const game = makeGame(Array(10).fill(1)); // all fails
   startGame(game);
-  game.setConfig({ turnLimit: 3 }, "gm1");
+  game.setConfig({ turnLimit: 3, cooldownTurns: 0 }, "gm1"); // isolate from cooldown
   game.roll({ connId: "p0", procedureId: "procedure-1" });
   game.roll({ connId: "p0", procedureId: "procedure-1" });
   assert.equal(game.state.phase, "playing");

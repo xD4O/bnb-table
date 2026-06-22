@@ -12,7 +12,11 @@ const DEFAULT_CONFIG = {
   establishedThreshold: 11,
   unestablishedThreshold: 17,
   injectNudgeAfterFails: 3,
+  cooldownTurns: 1, // house rule: a procedure is locked for this many turns after use (0 = off)
 };
+
+// Config keys that may legitimately be 0 (everything else must be >= 1).
+const ZERO_OK = new Set(["cooldownTurns"]);
 
 const DEFAULT_CAPACITY = { gm: 2, playerMin: 1, playerMax: 5 };
 
@@ -41,6 +45,7 @@ export class Game {
       objective: { initial: null, pivot: null, c2: null, persist: null },
       revealed: { initial: false, pivot: false, c2: false, persist: false },
       established: [],
+      lastUsed: {}, // procedureId -> turn number it was last rolled (for cooldown)
       turn: 0,
       successes: 0,
       failures: 0,
@@ -155,7 +160,8 @@ export class Game {
     for (const k of Object.keys(DEFAULT_CONFIG)) {
       if (partial[k] != null) {
         const v = Math.trunc(Number(partial[k]));
-        if (!Number.isFinite(v) || v < 1) return fail(`Invalid ${k}`);
+        const min = ZERO_OK.has(k) ? 0 : 1;
+        if (!Number.isFinite(v) || v < min) return fail(`Invalid ${k}`);
         next[k] = v;
       }
     }
@@ -196,6 +202,14 @@ export class Game {
     const card = this.byId.get(procedureId);
     if (!card || card.type !== "procedure") return fail("Pick a valid procedure");
 
+    const cd = this.state.config.cooldownTurns;
+    if (cd > 0) {
+      const last = this.state.lastUsed[procedureId];
+      const prospective = this.state.turn + 1; // the turn this roll would be
+      if (last != null && prospective - last <= cd)
+        return fail(`"${card.name}" is on cooldown (${last + cd - this.state.turn} turn(s) left)`);
+    }
+
     const established = this.state.established.includes(procedureId);
     const threshold = established
       ? this.state.config.establishedThreshold
@@ -206,6 +220,7 @@ export class Game {
     const success = total >= threshold;
 
     this.state.turn++;
+    this.state.lastUsed[procedureId] = this.state.turn;
     if (success) {
       this.state.consecutiveFails = 0;
     } else {
@@ -292,6 +307,19 @@ export class Game {
 
   // --- projection (role-filtered snapshot) ----------------------------------
 
+  // procedureId -> remaining cooldown turns (only entries with > 0)
+  cooldownMap() {
+    const cd = this.state.config.cooldownTurns;
+    const out = {};
+    if (cd > 0) {
+      for (const [pid, last] of Object.entries(this.state.lastUsed)) {
+        const left = Math.max(0, last + cd - this.state.turn);
+        if (left > 0) out[pid] = left;
+      }
+    }
+    return out;
+  }
+
   cardView(id) {
     const c = this.byId.get(id);
     return c ? { id: c.id, name: c.name, image: c.image, type: c.type } : null;
@@ -320,6 +348,7 @@ export class Game {
       revealed: s.revealed,
       established: s.established.map((id) => this.cardView(id)).filter(Boolean),
       procedures: this.cardsOfType("procedure"),
+      cooldowns: this.cooldownMap(),
       turn: s.turn,
       successes: s.successes,
       failures: s.failures,
