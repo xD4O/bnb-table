@@ -116,6 +116,7 @@ function renderBanner() {
   const b = $("banner"), s = state;
   if (s.phase === "won") { b.hidden = false; b.className = "won"; b.textContent = "🛡️ Defenders win — full attack chain detected!"; }
   else if (s.phase === "lost") { b.hidden = false; b.className = "lost"; b.textContent = "💀 Attackers win — out of time."; }
+  else if (s.awaitingReveal && s.you.role !== "gm") { b.hidden = false; b.className = "nudge"; b.textContent = "🔍 A detection is being confirmed by the Game Master…"; }
   else if (s.injectNudge) { b.hidden = false; b.className = "nudge"; b.textContent = `⚠ ${s.consecutiveFails} failed rolls in a row — Game Master may play an Inject.`; }
   else b.hidden = true;
 }
@@ -128,6 +129,7 @@ function renderSlots() {
     const o = state.objective[slot];
     const div = document.createElement("div");
     div.className = "slot";
+    div.dataset.type = slot;
     let img;
     if (o.locked) {
       img = assetUrl(o.back);
@@ -262,7 +264,19 @@ function renderGmPanel() {
     for (const c of g.builder.procedure) {
       html += `<label style="flex-direction:row;gap:.3rem"><input type="checkbox" data-est="${c.id}" ${est.has(c.id) ? "checked" : ""}/>${c.name}</label>`;
     }
-    html += `</div><div class="gm-row"><button class="gm-btn gold" id="gm-apply">Apply scenario</button></div></div>`;
+    html += `</div>`;
+
+    html += `<h3>Detection map <small>(optional — enables auto-reveal)</small></h3>
+      <p class="warn">For each attack card, pick the procedures that detect it (listed on the card art). Ctrl/⌘-click for multiple. Leave blank to reveal manually.</p>`;
+    for (const slot of SLOTS) {
+      const sel = new Set(s.gm.detection?.[slot] || []);
+      html += `<div class="gm-row"><label>${SLOT_LABEL[slot]}
+        <select multiple size="4" data-det="${slot}">
+        ${g.builder.procedure.map((c) => `<option value="${c.id}" ${sel.has(c.id) ? "selected" : ""}>${c.name}</option>`).join("")}
+        </select></label></div>`;
+    }
+
+    html += `<div class="gm-row"><button class="gm-btn gold" id="gm-apply">Apply scenario</button></div></div>`;
 
     html += `<div class="gm-block"><h3>3 · Rules</h3><div class="gm-row">
       <label>Turn limit<input type="number" id="cfg-turnLimit" value="${s.config.turnLimit}"/></label>
@@ -279,6 +293,12 @@ function renderGmPanel() {
       <div class="gm-row"><label style="flex-direction:row;gap:.3rem"><input type="checkbox" id="gm-force"/>Force start</label></div>`;
     html += `<div class="gm-row"><button class="gm-btn gold" id="gm-start">▶ Start incident</button></div></div>`;
   } else {
+    if (s.gm.pendingReveal) {
+      const pr = s.gm.pendingReveal;
+      html += `<div class="gm-block reveal-prompt"><h3>🔍 “${pr.procedureName}” detected a card — reveal which?</h3><div class="gm-row">`;
+      for (const slot of pr.options) html += `<button class="gm-btn gold" data-revealopt="${slot}">Reveal ${SLOT_LABEL[slot]}</button>`;
+      html += `<button class="gm-btn" id="gm-dismiss-reveal">No detection</button></div></div>`;
+    }
     html += `<div class="gm-block"><h3>Play an Inject</h3><div class="gm-row">
       <select id="gm-inject">${opt(g.builder.inject)}</select><button class="gm-btn" id="gm-play-inject">Play inject</button></div></div>`;
     html += `<div class="gm-block"><h3>Bring a Consultant</h3><div class="gm-row">
@@ -302,8 +322,14 @@ function wireGmPanel() {
     document.querySelectorAll("[data-obj]").forEach((s) => (objective[s.dataset.obj] = s.value));
     const established = [...document.querySelectorAll("[data-est]:checked")].map((c) => c.dataset.est);
     if (established.length !== 4) { showError("Pick exactly 4 established procedures"); return; }
-    send({ type: "setup", deck: $("gm-deck").value, objective, established });
+    const detection = {};
+    document.querySelectorAll("[data-det]").forEach((sel) => {
+      detection[sel.dataset.det] = [...sel.selectedOptions].map((o) => o.value);
+    });
+    send({ type: "setup", deck: $("gm-deck").value, objective, established, detection });
   });
+  document.querySelectorAll("[data-revealopt]").forEach((b) => (b.onclick = () => send({ type: "reveal", slot: b.dataset.revealopt })));
+  click("gm-dismiss-reveal", () => send({ type: "dismissReveal" }));
   click("gm-cfg", () => send({ type: "config", config: readCfg("cfg-") }));
   click("gm-cfg2", () => send({ type: "config", config: readCfg("cfg2-") }));
   click("gm-start", () => send({ type: "start", force: $("gm-force")?.checked }));

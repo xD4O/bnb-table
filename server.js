@@ -151,7 +151,10 @@ wss.on("connection", (ws) => {
       }
       case "setup": {
         if (msg.deck) room.changeDeck(msg.deck);
-        r = room.game.setup({ objective: msg.objective, established: msg.established }, connId);
+        r = room.game.setup(
+          { objective: msg.objective, established: msg.established, detection: msg.detection },
+          connId
+        );
         break;
       }
       case "config":
@@ -165,6 +168,9 @@ wss.on("connection", (ws) => {
         break;
       case "reveal":
         r = g.reveal({ slot: msg.slot }, connId);
+        break;
+      case "dismissReveal":
+        r = g.dismissReveal(connId);
         break;
       case "playInject":
         r = g.playInject({ cardId: msg.cardId }, connId);

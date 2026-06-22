@@ -12,7 +12,7 @@ const DEFAULT_CONFIG = {
   establishedThreshold: 11,
   unestablishedThreshold: 17,
   injectNudgeAfterFails: 3,
-  cooldownTurns: 1, // house rule: a procedure is locked for this many turns after use (0 = off)
+  cooldownTurns: 3, // house rule: a procedure is locked for this many turns after use (0 = off)
 };
 
 // Config keys that may legitimately be 0 (everything else must be >= 1).
@@ -44,6 +44,8 @@ export class Game {
       capacity: { ...DEFAULT_CAPACITY },
       objective: { initial: null, pivot: null, c2: null, persist: null },
       revealed: { initial: false, pivot: false, c2: false, persist: false },
+      detection: {}, // slot -> [procedureId...] that detect it (GM-only; read off card art)
+      pendingReveal: null, // { procedureName, options:[slot...] } when GM must choose
       established: [],
       lastUsed: {}, // procedureId -> turn number it was last rolled (for cooldown)
       turn: 0,
@@ -115,7 +117,7 @@ export class Game {
     return (this.d20() - 1) / 20;
   }
 
-  setup({ objective, established } = {}, by) {
+  setup({ objective, established, detection } = {}, by) {
     if (!this.requireGm(by)) return fail("Only the Game Master can set up the game");
     if (this.state.phase !== "setup") return fail("Reset before setting up a new game");
 
@@ -147,8 +149,17 @@ export class Game {
       est = this.pickRandom(this.cardsOfType("procedure"), 4).map((c) => c.id);
     }
 
+    // Optional detection map: per slot, which procedures detect that attack card.
+    const det = {};
+    for (const slot of SLOTS) {
+      const ids = (detection?.[slot] || []).filter((id) => this.byId.get(id)?.type === "procedure");
+      det[slot] = ids;
+    }
+
     this.state.objective = obj;
     this.state.established = est;
+    this.state.detection = det;
+    this.state.pendingReveal = null;
     this.state.revealed = { initial: false, pivot: false, c2: false, persist: false };
     this.log("Game Master set the scenario");
     return ok();
@@ -244,11 +255,61 @@ export class Game {
       `${who} ran "${card.name}" — rolled ${die}${mod ? (mod > 0 ? `+${mod}` : `${mod}`) : ""}=${total} vs ${threshold} → ${success ? "SUCCESS" : "no detection"}`
     );
 
-    if (this.state.turn >= this.state.config.turnLimit && this.state.successes < 4) {
+    // On a success, figure out which attack card(s) this procedure reveals.
+    if (success && this.state.phase === "playing") {
+      const opts = this.revealOptions(procedureId);
+      if (opts.length === 1) {
+        this._doReveal(opts[0], true);
+      } else if (opts.length > 1) {
+        this.state.pendingReveal = { procedureName: card.name, options: opts };
+        this.log(`${card.name} detected something — Game Master, choose which card to reveal`);
+      } else {
+        this.state.pendingReveal = null;
+        this.log(`${card.name} succeeded but detected nothing new`);
+      }
+    }
+
+    // House rule: a natural 1 or 20 triggers an Inject.
+    if ((die === 1 || die === 20) && this.state.phase === "playing") this._autoInject(die);
+
+    if (this.state.turn >= this.state.config.turnLimit && this.state.phase === "playing" && this.state.successes < 4) {
       this.state.phase = "lost";
       this.log("Out of time — the attackers win.");
     }
     return ok({ roll: this.state.lastRoll });
+  }
+
+  // Which unrevealed slots this procedure can reveal. With a detection map, only
+  // the matching cards; without one, all unrevealed slots (GM-judged).
+  revealOptions(procedureId) {
+    const unrevealed = SLOTS.filter((s) => !this.state.revealed[s]);
+    const det = this.state.detection || {};
+    const hasMap = Object.values(det).some((arr) => arr && arr.length);
+    if (hasMap) return unrevealed.filter((s) => (det[s] || []).includes(procedureId));
+    return unrevealed;
+  }
+
+  _autoInject(die) {
+    const injects = this.cardsOfType("inject");
+    if (!injects.length) return;
+    const unplayed = injects.filter((c) => !this.state.playedInjects.includes(c.id));
+    const pool = unplayed.length ? unplayed : injects;
+    const pick = pool[Math.floor(this.d20Random() * pool.length)] || pool[0];
+    this.state.playedInjects.push(pick.id);
+    this.log(`🎲 Natural ${die}! Inject auto-played: "${pick.name}"`);
+  }
+
+  _doReveal(slot, auto = false) {
+    if (this.state.revealed[slot]) return;
+    this.state.revealed[slot] = true;
+    this.state.successes = SLOTS.filter((s) => this.state.revealed[s]).length;
+    this.state.pendingReveal = null;
+    const card = this.byId.get(this.state.objective[slot]);
+    this.log(`${auto ? "Auto-detected" : "Detected"} the ${slot} card: "${card?.name}" (${this.state.successes}/4)`);
+    if (this.state.successes === 4) {
+      this.state.phase = "won";
+      this.log("All four attack cards detected — defenders win!");
+    }
   }
 
   reveal({ slot }, by) {
@@ -256,14 +317,14 @@ export class Game {
     if (this.state.phase !== "playing") return fail("Game is not in progress");
     if (!SLOTS.includes(slot)) return fail("Unknown slot");
     if (this.state.revealed[slot]) return fail("Already revealed");
-    this.state.revealed[slot] = true;
-    this.state.successes = SLOTS.filter((s) => this.state.revealed[s]).length;
-    const card = this.byId.get(this.state.objective[slot]);
-    this.log(`Detected the ${slot} card: "${card?.name}" (${this.state.successes}/4)`);
-    if (this.state.successes === 4) {
-      this.state.phase = "won";
-      this.log("All four attack cards detected — defenders win!");
-    }
+    this._doReveal(slot, false);
+    return ok();
+  }
+
+  dismissReveal(by) {
+    if (!this.requireGm(by)) return fail("Only the Game Master can do that");
+    this.state.pendingReveal = null;
+    this.log("Game Master: no card detected this turn");
     return ok();
   }
 
@@ -354,6 +415,7 @@ export class Game {
       failures: s.failures,
       consecutiveFails: s.consecutiveFails,
       injectNudge: s.consecutiveFails >= s.config.injectNudgeAfterFails && s.phase === "playing",
+      awaitingReveal: !!s.pendingReveal,
       lastRoll: s.lastRoll,
       playedInjects: s.playedInjects.map((id) => this.cardView(id)).filter(Boolean),
       playedConsultants: s.playedConsultants.map((id) => this.cardView(id)).filter(Boolean),
@@ -369,6 +431,8 @@ export class Game {
       ...base,
       gm: {
         solution: objective, // resolved cards (GM always sees them)
+        detection: s.detection,
+        pendingReveal: s.pendingReveal,
         builder: {
           initial: this.cardsOfType("initial"),
           pivot: this.cardsOfType("pivot"),

@@ -39,11 +39,12 @@ function makeGame(d20queue = []) {
 }
 
 // Standard fixed setup so tests don't depend on randomness.
-function fixedSetup(game) {
+function fixedSetup(game, detection) {
   game.setup(
     {
       objective: { initial: "initial-1", pivot: "pivot-1", c2: "c2-1", persist: "persist-1" },
       established: ["procedure-1", "procedure-2", "procedure-3", "procedure-4"],
+      detection,
     },
     "gm1"
   );
@@ -159,6 +160,85 @@ test("projection reports remaining cooldown turns per procedure", () => {
   assert.equal(game.project("player").cooldowns["procedure-1"], 2);
   game.roll({ connId: "p0", procedureId: "procedure-2" });
   assert.equal(game.project("player").cooldowns["procedure-1"], 1);
+});
+
+// --- detection / auto-reveal -----------------------------------------------
+
+function startGameDet(game, detection, players = 1) {
+  game.join("gm1", { name: "GM", role: "gm" });
+  for (let i = 0; i < players; i++) game.join(`p${i}`, { name: `P${i}`, role: "player" });
+  fixedSetup(game, detection);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  assert.equal(game.start({}, "gm1").ok, true);
+}
+
+test("success auto-reveals when the procedure detects exactly one unrevealed card", () => {
+  const game = makeGame([15]);
+  startGameDet(game, { initial: ["procedure-1"], pivot: ["procedure-2"] });
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // detects only initial
+  assert.equal(game.state.revealed.initial, true);
+  assert.equal(game.state.successes, 1);
+  assert.equal(game.state.pendingReveal, null);
+});
+
+test("success with multiple detected cards waits for the GM to choose", () => {
+  const game = makeGame([15]);
+  startGameDet(game, { initial: ["procedure-1"], pivot: ["procedure-1"] });
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // detects initial AND pivot
+  assert.equal(game.state.revealed.initial, false);
+  assert.equal(game.state.pendingReveal.options.sort().join(), "initial,pivot");
+  // GM picks one
+  game.reveal({ slot: "pivot" }, "gm1");
+  assert.equal(game.state.revealed.pivot, true);
+  assert.equal(game.state.pendingReveal, null);
+});
+
+test("success that detects nothing reveals nothing (with a detection map)", () => {
+  const game = makeGame([15]);
+  startGameDet(game, { initial: ["procedure-2"] });
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // procedure-1 detects nothing
+  assert.equal(game.state.successes, 0);
+  assert.equal(game.state.pendingReveal, null);
+});
+
+test("without a detection map, a success with one card left auto-reveals it", () => {
+  const game = makeGame([15]);
+  startGameDet(game, undefined);
+  game.reveal({ slot: "initial" }, "gm1");
+  game.reveal({ slot: "pivot" }, "gm1");
+  game.reveal({ slot: "c2" }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // only persist left -> auto
+  assert.equal(game.state.revealed.persist, true);
+  assert.equal(game.state.phase, "won");
+});
+
+// --- auto-inject on natural 1 / 20 -----------------------------------------
+
+test("a natural 20 auto-plays an inject", () => {
+  const game = makeGame([20]);
+  startGameDet(game, { initial: ["procedure-2"] }); // detects nothing, so no win interference
+  game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(game.state.playedInjects.length, 1);
+  assert.equal(game.byId.get(game.state.playedInjects[0]).type, "inject");
+});
+
+test("a natural 1 auto-plays an inject; a middling roll does not", () => {
+  const g1 = makeGame([1]);
+  startGameDet(g1, { initial: ["procedure-2"] });
+  g1.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(g1.state.playedInjects.length, 1);
+
+  const g2 = makeGame([10]);
+  startGameDet(g2, { initial: ["procedure-2"] });
+  g2.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(g2.state.playedInjects.length, 0);
+});
+
+// --- config default --------------------------------------------------------
+
+test("default cooldown is 3 turns", () => {
+  const game = makeGame();
+  assert.equal(game.state.config.cooldownTurns, 3);
 });
 
 // --- win / lose ------------------------------------------------------------
