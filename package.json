@@ -1,0 +1,14 @@
+{
+  "name": "backdoors-and-breaches-local",
+  "version": "1.0.0",
+  "description": "Local LAN-multiplayer Backdoors & Breaches with a hidden Game Master objective",
+  "type": "module",
+  "scripts": {
+    "fetch-cards": "node scripts/fetch-cards.js",
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

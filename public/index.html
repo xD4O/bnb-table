@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backdoors &amp; Breaches — Local Table</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Join / role picker overlay -->
+    <div id="join" class="overlay">
+      <div class="join-card">
+        <h1>Backdoors &amp; Breaches</h1>
+        <p class="sub" id="join-sub">Local table</p>
+        <label>Your name<input id="name" maxlength="40" placeholder="e.g. Alex" /></label>
+
+        <div id="role-pick">
+          <button class="role-btn" data-role="player">
+            <strong>Defender</strong><span>Roll dice &amp; investigate</span>
+            <em id="cnt-player"></em>
+          </button>
+          <button class="role-btn" data-role="viewer">
+            <strong>Viewer</strong><span>Watch the board</span>
+            <em id="cnt-viewer"></em>
+          </button>
+        </div>
+
+        <div id="gm-pick" hidden>
+          <label>Game Master PIN<input id="pin" inputmode="numeric" placeholder="4 digits" /></label>
+          <button class="role-btn gm" data-role="gm">
+            <strong>Enter as Game Master</strong><span>You will see the hidden attack chain</span>
+            <em id="cnt-gm"></em>
+          </button>
+        </div>
+
+        <p class="err" id="join-err"></p>
+      </div>
+    </div>
+
+    <!-- Main board -->
+    <div id="board" hidden>
+      <header id="topbar">
+        <div class="brand">B&amp;B <span id="deck-name"></span></div>
+        <div id="trackers">
+          <span class="track" id="t-turn">Turn —</span>
+          <span class="track ok" id="t-succ">Detected 0/4</span>
+          <span class="track bad" id="t-fail">Failures 0</span>
+          <span class="track" id="t-phase">Setup</span>
+          <span class="track seats" id="t-seats"></span>
+        </div>
+      </header>
+
+      <div id="banner" hidden></div>
+
+      <section id="objectives">
+        <h2>Attack Chain <small>(the objective)</small></h2>
+        <div class="slot-row" id="slot-row"></div>
+      </section>
+
+      <section id="lastroll" hidden></section>
+
+      <div class="columns">
+        <section id="procedures-sec">
+          <h2>Established Procedures <small>(+ all detections)</small></h2>
+          <div class="proc-row" id="established-row"></div>
+
+          <div id="roll-controls" hidden>
+            <h3>Run a Procedure</h3>
+            <select id="proc-select"></select>
+            <label class="mod">Modifier
+              <input id="modifier" type="number" value="0" step="1" />
+            </label>
+            <button id="roll-btn" class="primary">🎲 Roll d20</button>
+          </div>
+
+          <div id="played"></div>
+        </section>
+
+        <aside id="side">
+          <section id="gm-panel" hidden></section>
+          <section id="logsec">
+            <h2>Activity Log</h2>
+            <ul id="log"></ul>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
