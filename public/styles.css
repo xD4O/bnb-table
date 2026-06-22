@@ -11,6 +11,9 @@
   --gold: #e3b341;
 }
 * { box-sizing: border-box; }
+/* The `hidden` attribute must win over component display rules (e.g. .overlay's
+   display:grid), otherwise hidden panels like the join overlay stay visible. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);

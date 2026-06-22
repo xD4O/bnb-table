@@ -183,10 +183,24 @@ test("sixth player is rejected, viewers are unlimited, seats reopen on disconnec
   assert.equal(game.counts().player, 5);
 });
 
-test("start below player minimum requires force", () => {
+test("default minimum players is 1", () => {
+  const game = makeGame();
+  assert.equal(game.state.capacity.playerMin, 1);
+});
+
+test("one player meets the minimum and can start without force", () => {
   const game = makeGame();
   game.join("gm1", { name: "GM", role: "gm" });
   game.join("p0", { name: "P0", role: "player" });
+  fixedSetup(game);
+  const r = game.start({}, "gm1");
+  assert.equal(r.ok, true, r.error);
+  assert.equal(game.state.phase, "playing");
+});
+
+test("start with zero players requires force", () => {
+  const game = makeGame();
+  game.join("gm1", { name: "GM", role: "gm" });
   fixedSetup(game);
   const r = game.start({}, "gm1");
   assert.equal(r.ok, false);

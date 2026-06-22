@@ -14,7 +14,7 @@ const DEFAULT_CONFIG = {
   injectNudgeAfterFails: 3,
 };
 
-const DEFAULT_CAPACITY = { gm: 2, playerMin: 3, playerMax: 5 };
+const DEFAULT_CAPACITY = { gm: 2, playerMin: 1, playerMax: 5 };
 
 const ok = (extra = {}) => ({ ok: true, ...extra });
 const fail = (error, extra = {}) => ({ ok: false, error, ...extra });

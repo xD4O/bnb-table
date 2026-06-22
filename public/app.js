@@ -9,11 +9,13 @@ const SLOT_LABEL = { initial: "Initial Compromise", pivot: "Pivot & Escalate", c
 const $ = (id) => document.getElementById(id);
 const assetUrl = (p) => (p ? "/assets/" + p : "");
 let ws, state = null, joined = false;
+let myJoin = null; // { role, name, pin } — remembered so we can re-join after a reconnect
 
 // ---- connection ------------------------------------------------------------
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { if (myJoin) sendJoin(); }; // re-establish our seat after a reconnect
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === "state") {
@@ -24,6 +26,13 @@ function connect() {
     }
   };
   ws.onclose = () => setTimeout(connect, 1000);
+}
+
+function sendJoin() {
+  if (!myJoin) return;
+  const m = { type: "join", role: myJoin.role, name: myJoin.name };
+  if (myJoin.role === "gm") m.pin = myJoin.pin;
+  send(m);
 }
 
 function send(obj) { ws.readyState === 1 && ws.send(JSON.stringify(obj)); }
@@ -46,14 +55,11 @@ function setupJoin() {
       const role = btn.dataset.role;
       const name = $("name").value.trim();
       if (!name) { showError("Enter a name first"); return; }
-      const m = { type: "join", role, name };
-      if (role === "gm") m.pin = $("pin").value.trim();
-      pendingRole = role;
-      send(m);
+      myJoin = { role, name, pin: role === "gm" ? $("pin").value.trim() : undefined };
+      sendJoin();
     });
   });
 }
-let pendingRole = null;
 
 function updateJoinCounts() {
   if (!state || joined) return;
@@ -69,10 +75,13 @@ function updateJoinCounts() {
 
 // We learn we're "in" when the server reports our chosen role as our `you.role`.
 function checkJoined() {
-  if (!joined && pendingRole && state?.you?.role === pendingRole) {
-    joined = true;
-    $("join").hidden = true;
-    $("board").hidden = false;
+  if (!myJoin) return;
+  if (state?.you?.role === myJoin.role) {
+    if (!joined) {
+      joined = true;
+      $("join").hidden = true;
+      $("board").hidden = false;
+    }
   }
 }
 
