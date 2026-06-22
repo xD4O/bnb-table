@@ -111,10 +111,24 @@ section { padding: 1rem 1.2rem; }
 .slot.done { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok), 0 0 22px rgba(63,185,80,.35); }
 .slot.done .label::after { content: " ✓"; color: var(--ok); }
 
-#lastroll { display: flex; align-items: center; gap: 1rem; background: var(--panel); border-bottom: 1px solid var(--line); }
-.die { font-size: 2.4rem; font-weight: 700; width: 3.4rem; height: 3.4rem; display: grid; place-items: center; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+#lastroll { display: flex; align-items: center; gap: 1rem; background: var(--panel); border-bottom: 1px solid var(--line); border-radius: 14px; margin: .5rem auto; }
+.die {
+  font-size: 2.2rem; font-weight: 800; width: 3.6rem; height: 3.6rem; display: grid; place-items: center;
+  border-radius: 14px; background: radial-gradient(circle at 30% 25%, #2a3340, #161c25);
+  border: 1px solid var(--line); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 16px rgba(0,0,0,.4);
+}
 #lastroll.success .die { color: var(--ok); border-color: var(--ok); }
 #lastroll.failroll .die { color: var(--bad); border-color: var(--bad); }
+.die.crit { color: var(--gold) !important; border-color: var(--gold); box-shadow: 0 0 22px rgba(227,179,65,.6); }
+.die.fumble { color: var(--bad) !important; border-color: var(--bad); box-shadow: 0 0 22px rgba(248,81,73,.55); }
+.die.rolling { animation: dieRoll .5s linear infinite; color: var(--ink); }
+@keyframes dieRoll {
+  0% { transform: rotate(0) scale(1.08); }
+  25% { transform: rotate(-14deg) scale(1.12); }
+  50% { transform: rotate(10deg) scale(1.05); }
+  75% { transform: rotate(-8deg) scale(1.12); }
+  100% { transform: rotate(0) scale(1.08); }
+}
 .roll-text strong { font-size: 1.05rem; }
 .roll-text .meta { color: var(--muted); font-size: .9rem; }
 
@@ -151,7 +165,21 @@ section { padding: 1rem 1.2rem; }
 .gm-btn.danger { border-color: var(--bad); color: var(--bad); }
 .warn { color: var(--gold); font-size: .85rem; }
 
-#log { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; font-size: .88rem; }
+/* chat */
+#chatsec { display: flex; flex-direction: column; }
+#chat-scope { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; }
+#chat-log { list-style: none; margin: 0 0 .5rem; padding: .25rem; height: 30vh; min-height: 160px; overflow-y: auto; background: rgba(0,0,0,.18); border: 1px solid var(--line); border-radius: 10px; font-size: .9rem; }
+#chat-log .msg { padding: .3rem .4rem; border-radius: 8px; margin-bottom: .25rem; line-height: 1.35; word-break: break-word; }
+#chat-log .msg.ch-viewers { background: rgba(171,99,230,.12); }
+#chat-log .msg.ch-players { background: rgba(59,141,255,.10); }
+#chat-log .who { font-weight: 700; }
+#chat-log .role-gm .who { color: var(--gold); }
+#chat-log .chtag { font-style: normal; font-size: .7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 .3rem; margin-left: .2rem; }
+#chat-input-row { display: flex; gap: .4rem; }
+#chat-input { flex: 1; }
+#chat-channel { max-width: 6.5rem; }
+
+#log { list-style: none; margin: 0; padding: 0; max-height: 40vh; overflow: auto; font-size: .88rem; }
 #log li { padding: .35rem .2rem; border-bottom: 1px solid var(--line); color: var(--muted); }
 #log li:first-child { color: var(--ink); }
 #played .card-strip .thumb { width: 78px; }

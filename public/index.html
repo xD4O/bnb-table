@@ -79,6 +79,15 @@
 
         <aside id="side">
           <section id="gm-panel" hidden></section>
+          <section id="chatsec">
+            <h2>Chat <small id="chat-scope"></small></h2>
+            <ul id="chat-log"></ul>
+            <div id="chat-input-row">
+              <select id="chat-channel" hidden title="Send to channel"></select>
+              <input id="chat-input" maxlength="500" placeholder="Type a message…" autocomplete="off" />
+              <button id="chat-send" class="primary">Send</button>
+            </div>
+          </section>
           <section id="logsec">
             <h2>Activity Log</h2>
             <ul id="log"></ul>

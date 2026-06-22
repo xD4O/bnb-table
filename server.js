@@ -68,6 +68,16 @@ class Room {
       ws.send(JSON.stringify({ type: "state", state: proj }));
     }
   }
+
+  // Chat is pushed on its own channel so it doesn't trigger a full board re-render
+  // (which would reset any in-progress GM panel selections).
+  broadcastChat() {
+    for (const [connId, ws] of this.sockets) {
+      if (ws.readyState !== ws.OPEN) continue;
+      const role = this.game.roleOf(connId) || "viewer";
+      ws.send(JSON.stringify({ type: "chat", messages: this.game.chatFor(role) }));
+    }
+  }
 }
 
 const room = new Room(process.env.BNB_DECK || "CoreV3.1");
@@ -181,6 +191,9 @@ wss.on("connection", (ws) => {
       case "note":
         r = g.note({ text: msg.text }, connId);
         break;
+      case "chat":
+        r = g.postChat({ connId, text: msg.text, channel: msg.channel });
+        break;
       case "reset":
         r = g.reset(connId);
         break;
@@ -189,7 +202,11 @@ wss.on("connection", (ws) => {
     }
 
     if (!r.ok) send(ws, { type: "error", error: r.error, needForce: r.needForce });
-    room.broadcast();
+    if (msg.type === "chat") {
+      if (r.ok) room.broadcastChat();
+    } else {
+      room.broadcast();
+    }
   });
 
   ws.on("close", () => {

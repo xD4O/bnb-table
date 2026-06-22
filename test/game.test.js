@@ -241,6 +241,50 @@ test("default cooldown is 3 turns", () => {
   assert.equal(game.state.config.cooldownTurns, 3);
 });
 
+// --- chat visibility -------------------------------------------------------
+
+function chatTable() {
+  const game = makeGame();
+  game.join("gm1", { name: "GM", role: "gm" });
+  game.join("p0", { name: "Ann", role: "player" });
+  game.join("v0", { name: "Eve", role: "viewer" });
+  return game;
+}
+
+test("player chat is seen by players and GM but not viewers", () => {
+  const game = chatTable();
+  game.postChat({ connId: "p0", text: "team, focus DNS" });
+  assert.deepEqual(game.chatFor("player").map((m) => m.text), ["team, focus DNS"]);
+  assert.deepEqual(game.chatFor("gm").map((m) => m.text), ["team, focus DNS"]);
+  assert.deepEqual(game.chatFor("viewer").map((m) => m.text), []);
+});
+
+test("viewer chat is seen by viewers and GM but not players", () => {
+  const game = chatTable();
+  game.postChat({ connId: "v0", text: "they'll never get it" });
+  assert.deepEqual(game.chatFor("viewer").map((m) => m.text), ["they'll never get it"]);
+  assert.deepEqual(game.chatFor("gm").map((m) => m.text), ["they'll never get it"]);
+  assert.deepEqual(game.chatFor("player").map((m) => m.text), []);
+});
+
+test("GM can address either the players or the viewers channel", () => {
+  const game = chatTable();
+  game.postChat({ connId: "gm1", text: "hint for the team", channel: "players" });
+  game.postChat({ connId: "gm1", text: "psst, spectators", channel: "viewers" });
+  assert.deepEqual(game.chatFor("player").map((m) => m.text), ["hint for the team"]);
+  assert.deepEqual(game.chatFor("viewer").map((m) => m.text), ["psst, spectators"]);
+  assert.equal(game.chatFor("gm").length, 2);
+});
+
+test("projection carries the role-filtered chat", () => {
+  const game = chatTable();
+  game.postChat({ connId: "p0", text: "p" });
+  game.postChat({ connId: "v0", text: "v" });
+  assert.deepEqual(game.project("viewer").chat.map((m) => m.text), ["v"]);
+  assert.deepEqual(game.project("player").chat.map((m) => m.text), ["p"]);
+  assert.equal(game.project("gm").chat.length, 2);
+});
+
 // --- win / lose ------------------------------------------------------------
 
 test("revealing all 4 attack cards wins the game", () => {

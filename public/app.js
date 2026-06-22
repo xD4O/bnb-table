@@ -10,6 +10,8 @@ const $ = (id) => document.getElementById(id);
 const assetUrl = (p) => (p ? "/assets/" + p : "");
 let ws, state = null, joined = false;
 let myJoin = null; // { role, name, pin } — remembered so we can re-join after a reconnect
+let chat = []; // role-filtered chat, updated on its own channel
+let animatedRollTs = null; // so the d20 animation only fires on a genuinely new roll
 
 // ---- connection ------------------------------------------------------------
 
@@ -20,7 +22,11 @@ function connect() {
     const msg = JSON.parse(ev.data);
     if (msg.type === "state") {
       state = msg.state;
+      if (state.chat) chat = state.chat;
       render();
+    } else if (msg.type === "chat") {
+      chat = msg.messages;
+      renderChat();
     } else if (msg.type === "error") {
       showError(msg.error);
     }
@@ -109,7 +115,57 @@ function render() {
   renderRollControls();
   renderPlayed();
   renderLog();
+  renderChat();
   renderGmPanel();
+}
+
+// ---- chat ------------------------------------------------------------------
+
+const ROLE_ICON = { gm: "🎴", player: "🛡️", viewer: "👁️" };
+
+function renderChat() {
+  const log = $("chat-log");
+  if (!log || !state) return;
+  const isGm = state.you.role === "gm";
+  $("chat-scope").textContent = isGm
+    ? "— you see all channels"
+    : state.you.role === "viewer"
+    ? "— viewers only"
+    : "— your team";
+  // GM gets a channel target selector
+  const chan = $("chat-channel");
+  chan.hidden = !isGm;
+  if (isGm && !chan.dataset.ready) {
+    chan.innerHTML = `<option value="players">→ Team</option><option value="viewers">→ Viewers</option>`;
+    chan.dataset.ready = "1";
+  }
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+  log.innerHTML = chat
+    .map(
+      (m) =>
+        `<li class="msg ch-${m.channel} role-${m.role}"><span class="who">${ROLE_ICON[m.role] || ""} ${escapeHtml(m.from)}` +
+        (isGm ? ` <em class="chtag">${m.channel === "viewers" ? "viewers" : "team"}</em>` : "") +
+        `</span> ${escapeHtml(m.text)}</li>`
+    )
+    .join("");
+  if (nearBottom) log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function setupChat() {
+  const input = $("chat-input"), send_ = () => {
+    const text = input.value.trim();
+    if (!text || !joined) return;
+    const m = { type: "chat", text };
+    if (state?.you?.role === "gm") m.channel = $("chat-channel").value;
+    send(m);
+    input.value = "";
+  };
+  $("chat-send").addEventListener("click", send_);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send_(); } });
 }
 
 function renderBanner() {
@@ -159,11 +215,29 @@ function renderLastRoll() {
   if (!r) { el.hidden = true; return; }
   el.hidden = false;
   el.className = r.success ? "success" : "failroll";
+  const crit = r.d20 === 20 ? " crit" : r.d20 === 1 ? " fumble" : "";
   el.innerHTML =
-    `<div class="die">${r.d20}</div>` +
+    `<div class="die${crit}">${r.d20}</div>` +
     `<div class="roll-text"><strong>${r.playerName} ran “${r.procedureName}”${r.established ? " (established)" : ""}</strong>` +
     `<div class="meta">d20 ${r.d20}${r.modifier ? (r.modifier > 0 ? ` +${r.modifier}` : ` ${r.modifier}`) : ""} = ${r.total} vs ${r.threshold} → ` +
-    `${r.success ? "SUCCESS" : "no detection"}</div></div>`;
+    `${r.success ? "SUCCESS" : "no detection"}${r.d20 === 20 ? " · NAT 20!" : r.d20 === 1 ? " · NAT 1!" : ""}</div></div>`;
+  // animate only when this is a brand-new roll
+  if (r.ts !== animatedRollTs) { animatedRollTs = r.ts; animateDie(el.querySelector(".die"), r.d20); }
+}
+
+// Tumble through random faces, then settle on the final value.
+function animateDie(el, finalValue) {
+  if (!el) return;
+  el.classList.add("rolling");
+  const start = performance.now();
+  const iv = setInterval(() => {
+    el.textContent = 1 + Math.floor(Math.random() * 20);
+    if (performance.now() - start > 650) {
+      clearInterval(iv);
+      el.textContent = finalValue;
+      el.classList.remove("rolling");
+    }
+  }, 55);
 }
 
 // All procedures (established highlighted + non-established shown), with cooldown overlay.
@@ -364,4 +438,5 @@ function setupLightbox() {
 
 setupJoin();
 setupLightbox();
+setupChat();
 connect();

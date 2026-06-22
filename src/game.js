@@ -56,6 +56,7 @@ export class Game {
       playedInjects: [],
       playedConsultants: [],
       log: [],
+      chat: [], // { id, from, role, channel: "players"|"viewers", text }
     };
   }
 
@@ -361,6 +362,29 @@ export class Game {
     return ok();
   }
 
+  // Chat channels: players <-> GM, and viewers <-> GM. Viewers never see player
+  // chat and vice-versa; the GM sees and can post to both.
+  postChat({ connId, text, channel }) {
+    const p = this.players.get(connId);
+    if (!p) return fail("Join before chatting");
+    const t = String(text || "").trim().slice(0, 500);
+    if (!t) return fail("Empty message");
+    let ch;
+    if (p.role === "viewer") ch = "viewers";
+    else if (p.role === "player") ch = "players";
+    else ch = channel === "viewers" ? "viewers" : "players"; // GM chooses
+    const msg = { id: this.state.chat.length + 1, from: p.name, role: p.role, channel: ch, text: t };
+    this.state.chat.push(msg);
+    if (this.state.chat.length > 200) this.state.chat.shift();
+    return ok({ message: msg });
+  }
+
+  chatFor(role) {
+    if (role === "gm") return this.state.chat;
+    const ch = role === "viewer" ? "viewers" : "players";
+    return this.state.chat.filter((m) => m.channel === ch);
+  }
+
   log(text) {
     this.state.log.push({ ts: this.state.log.length + 1, text });
     if (this.state.log.length > 200) this.state.log.shift();
@@ -421,6 +445,7 @@ export class Game {
       playedConsultants: s.playedConsultants.map((id) => this.cardView(id)).filter(Boolean),
       players: [...this.players.values()].map((p) => ({ name: p.name, role: p.role })),
       log: s.log,
+      chat: this.chatFor(role),
       backs: this.catalog.backs,
     };
 
