@@ -183,7 +183,10 @@ wss.on("connection", (ws) => {
         r = g.dismissReveal(connId);
         break;
       case "playInject":
-        r = g.playInject({ cardId: msg.cardId }, connId);
+        r = g.playInject({ cardId: msg.cardId, modifier: msg.modifier }, connId);
+        break;
+      case "setModifier":
+        r = g.setModifier({ value: msg.value }, connId);
         break;
       case "playConsultant":
         r = g.playConsultant({ cardId: msg.cardId }, connId);

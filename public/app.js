@@ -106,6 +106,9 @@ function render() {
   lt.className = "track" + (s.phase === "playing" && left <= 2 ? " low" : s.phase === "playing" ? " ok" : "");
   $("t-succ").textContent = `Detected ${s.successes}/4`;
   $("t-fail").textContent = `Failures ${s.failures}`;
+  const tm = $("t-mod");
+  if (s.activeModifier) { tm.hidden = false; tm.className = "track bad"; tm.textContent = `🎚 ${s.activeModifier > 0 ? "+" : ""}${s.activeModifier} to rolls`; }
+  else tm.hidden = true;
   $("t-phase").textContent = ({ setup: "Setup", playing: "In progress", won: "Defenders win", lost: "Attackers win" })[s.phase];
   $("t-seats").textContent = `GM ${s.counts.gm}/${s.capacity.gm} · Def ${s.counts.player}/${s.capacity.playerMax} · 👁 ${s.counts.viewer}`;
   renderBanner();
@@ -219,11 +222,13 @@ function renderLastRoll() {
   el.innerHTML =
     `<div class="die${crit}">${r.d20}</div>` +
     `<div class="roll-text"><strong>${r.playerName} ran “${r.procedureName}”${r.established ? " (established)" : ""}</strong>` +
-    `<div class="meta">d20 ${r.d20}${r.modifier ? (r.modifier > 0 ? ` +${r.modifier}` : ` ${r.modifier}`) : ""} = ${r.total} vs ${r.threshold} → ` +
+    `<div class="meta">d20 ${r.d20}${modStr(r.modifier)}${r.activeModifier ? `${modStr(r.activeModifier)} (inject)` : ""} = ${r.total} vs ${r.threshold} → ` +
     `${r.success ? "SUCCESS" : "no detection"}${r.d20 === 20 ? " · NAT 20!" : r.d20 === 1 ? " · NAT 1!" : ""}</div></div>`;
   // animate only when this is a brand-new roll
   if (r.ts !== animatedRollTs) { animatedRollTs = r.ts; animateDie(el.querySelector(".die"), r.d20); }
 }
+
+const modStr = (m) => (m ? (m > 0 ? ` +${m}` : ` ${m}`) : "");
 
 // Tumble through random faces, then settle on the final value.
 function animateDie(el, finalValue) {
@@ -373,8 +378,16 @@ function renderGmPanel() {
       for (const slot of pr.options) html += `<button class="gm-btn gold" data-revealopt="${slot}">Reveal ${SLOT_LABEL[slot]}</button>`;
       html += `<button class="gm-btn" id="gm-dismiss-reveal">No detection</button></div></div>`;
     }
+    html += `<div class="gm-block"><h3>Active roll modifier</h3><div class="gm-row">
+      <input type="number" id="gm-modval" value="${s.activeModifier || 0}" style="width:5rem" />
+      <button class="gm-btn" id="gm-setmod">Set</button>
+      <button class="gm-btn" id="gm-clearmod">Clear</button>
+      </div><p class="warn">Added to every roll — e.g. an inject that says “−3 to all procedures”.</p></div>`;
     html += `<div class="gm-block"><h3>Play an Inject</h3><div class="gm-row">
-      <select id="gm-inject">${opt(g.builder.inject)}</select><button class="gm-btn" id="gm-play-inject">Play inject</button></div></div>`;
+      <select id="gm-inject">${opt(g.builder.inject)}</select>
+      <label>roll mod<input type="number" id="gm-inject-mod" value="0" style="width:4rem" /></label>
+      <button class="gm-btn" id="gm-play-inject">Play inject</button></div>
+      <p class="warn">Set “roll mod” if this inject changes rolls (e.g. −3); leave 0 otherwise.</p></div>`;
     html += `<div class="gm-block"><h3>Bring a Consultant</h3><div class="gm-row">
       <select id="gm-consultant">${opt(g.builder.consultant)}</select><button class="gm-btn" id="gm-play-consultant">Play consultant</button></div></div>`;
     html += `<div class="gm-block"><h3>Note to the table</h3><div class="gm-row">
@@ -407,7 +420,9 @@ function wireGmPanel() {
   click("gm-cfg", () => send({ type: "config", config: readCfg("cfg-") }));
   click("gm-cfg2", () => send({ type: "config", config: readCfg("cfg2-") }));
   click("gm-start", () => send({ type: "start", force: $("gm-force")?.checked }));
-  click("gm-play-inject", () => send({ type: "playInject", cardId: $("gm-inject").value }));
+  click("gm-play-inject", () => send({ type: "playInject", cardId: $("gm-inject").value, modifier: Number($("gm-inject-mod").value) || 0 }));
+  click("gm-setmod", () => send({ type: "setModifier", value: Number($("gm-modval").value) || 0 }));
+  click("gm-clearmod", () => send({ type: "setModifier", value: 0 }));
   click("gm-play-consultant", () => send({ type: "playConsultant", cardId: $("gm-consultant").value }));
   click("gm-add-note", () => { send({ type: "note", text: $("gm-note").value }); $("gm-note").value = ""; });
   click("gm-reset", () => confirm("Reset to a fresh game?") && send({ type: "reset" }));

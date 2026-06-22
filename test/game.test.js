@@ -241,6 +241,45 @@ test("default cooldown is 3 turns", () => {
   assert.equal(game.state.config.cooldownTurns, 3);
 });
 
+// --- active (inject) roll modifier -----------------------------------------
+
+test("active roll modifier is applied to every roll", () => {
+  const game = makeGame([13]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.setModifier({ value: -3 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 13 - 3 = 10, established needs 11
+  assert.equal(game.state.lastRoll.activeModifier, -3);
+  assert.equal(game.state.lastRoll.total, 10);
+  assert.equal(game.state.lastRoll.success, false);
+});
+
+test("playing an inject can set the active roll modifier", () => {
+  const game = makeGame([13]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.playInject({ cardId: "inject-1", modifier: -3 }, "gm1");
+  assert.equal(game.state.activeModifier, -3);
+  game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(game.state.lastRoll.total, 10);
+});
+
+test("the active modifier stacks with a per-roll modifier", () => {
+  const game = makeGame([13]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.setModifier({ value: -3 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1", modifier: 2 }); // 13 + 2 - 3 = 12
+  assert.equal(game.state.lastRoll.total, 12);
+  assert.equal(game.state.lastRoll.success, true);
+});
+
+test("only the GM can change the active modifier", () => {
+  const game = makeGame();
+  startGame(game);
+  assert.equal(game.setModifier({ value: -3 }, "p0").ok, false);
+});
+
 // --- chat visibility -------------------------------------------------------
 
 function chatTable() {

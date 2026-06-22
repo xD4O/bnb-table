@@ -52,6 +52,7 @@ export class Game {
       successes: 0,
       failures: 0,
       consecutiveFails: 0,
+      activeModifier: 0, // standing modifier added to every roll (e.g. an inject's -3)
       lastRoll: null,
       playedInjects: [],
       playedConsultants: [],
@@ -227,8 +228,9 @@ export class Game {
       ? this.state.config.establishedThreshold
       : this.state.config.unestablishedThreshold;
     const mod = Math.trunc(Number(modifier) || 0);
+    const active = this.state.activeModifier || 0;
     const die = this.d20();
-    const total = die + mod;
+    const total = die + mod + active;
     const success = total >= threshold;
 
     this.state.turn++;
@@ -247,13 +249,15 @@ export class Game {
       established,
       d20: die,
       modifier: mod,
+      activeModifier: active,
       total,
       threshold,
       success,
       ts: this.state.turn,
     };
+    const ms = (m) => (m ? (m > 0 ? `+${m}` : `${m}`) : "");
     this.log(
-      `${who} ran "${card.name}" — rolled ${die}${mod ? (mod > 0 ? `+${mod}` : `${mod}`) : ""}=${total} vs ${threshold} → ${success ? "SUCCESS" : "no detection"}`
+      `${who} ran "${card.name}" — rolled ${die}${ms(mod)}${active ? `${ms(active)}(inject)` : ""}=${total} vs ${threshold} → ${success ? "SUCCESS" : "no detection"}`
     );
 
     // On a success, figure out which attack card(s) this procedure reveals.
@@ -329,12 +333,29 @@ export class Game {
     return ok();
   }
 
-  playInject({ cardId }, by) {
+  setModifier({ value }, by) {
+    if (!this.requireGm(by)) return fail("Only the Game Master can change the roll modifier");
+    const v = Math.trunc(Number(value));
+    if (!Number.isFinite(v) || Math.abs(v) > 20) return fail("Modifier must be between -20 and 20");
+    this.state.activeModifier = v;
+    this.log(v ? `Active roll modifier set to ${v > 0 ? "+" : ""}${v}` : "Active roll modifier cleared");
+    return ok();
+  }
+
+  playInject({ cardId, modifier }, by) {
     if (!this.requireGm(by)) return fail("Only the Game Master can play injects");
     const card = this.byId.get(cardId);
     if (!card || card.type !== "inject") return fail("Not an inject card");
     this.state.playedInjects.push(cardId);
-    this.log(`Inject played: "${card.name}"`);
+    let extra = "";
+    if (modifier != null && Number(modifier) !== 0) {
+      const v = Math.trunc(Number(modifier));
+      if (Number.isFinite(v) && Math.abs(v) <= 20) {
+        this.state.activeModifier = v;
+        extra = ` — active roll modifier now ${v > 0 ? "+" : ""}${v}`;
+      }
+    }
+    this.log(`Inject played: "${card.name}"${extra}`);
     return ok();
   }
 
@@ -438,6 +459,7 @@ export class Game {
       successes: s.successes,
       failures: s.failures,
       consecutiveFails: s.consecutiveFails,
+      activeModifier: s.activeModifier,
       injectNudge: s.consecutiveFails >= s.config.injectNudgeAfterFails && s.phase === "playing",
       awaitingReveal: !!s.pendingReveal,
       lastRoll: s.lastRoll,
