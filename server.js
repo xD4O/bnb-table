@@ -14,7 +14,7 @@ import { dirname } from "node:path";
 import os from "node:os";
 import { WebSocketServer } from "ws";
 import { Game, SLOTS } from "./src/game.js";
-import { narrate, narratorInfo } from "./src/narrator.js";
+import { narrate, narratorInfo, listModels } from "./src/narrator.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -48,6 +48,8 @@ class Room {
     this.deck = this.decks.includes(deck) ? deck : this.decks[0];
     this.game = new Game(loadCatalog(this.deck));
     this.sockets = new Map(); // connId -> ws
+    this.narrSeq = 0; // solo narration entry counter
+    this.model = undefined; // solo narrator model override
   }
 
   changeDeck(deck) {
@@ -96,11 +98,19 @@ function chainCtx(game) {
   }));
 }
 
+// Stream one narration entry token-by-token to the solo player, then commit it to state.
 async function narrateInto(room, kind, extra = {}) {
   const g = room.game;
-  const text = await narrate(kind, { chain: chainCtx(g), theme: room.theme, turn: g.state.turn, ...extra });
-  g.addNarrative(text);
-  room.broadcast();
+  const ws = [...room.sockets.values()][0];
+  const id = ++room.narrSeq;
+  const ctx = { chain: chainCtx(g), theme: room.theme, turn: g.state.turn, model: room.model, ...extra };
+  let acc = "";
+  await narrate(kind, ctx, (tok) => {
+    acc += tok;
+    if (ws) send(ws, { type: "narrate", id, text: acc, done: false });
+  });
+  g.addNarrative(acc);
+  if (ws) send(ws, { type: "narrate", id, text: acc, done: true });
 }
 
 // After a solo roll: narrate the outcome, then any inject, then win/lose.
@@ -167,6 +177,13 @@ const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/" || url === "/gm") return sendFile(res, join(PUBLIC, "index.html"));
   if (url === "/solo") return sendFile(res, join(PUBLIC, "solo.html"));
+  if (url === "/api/models") {
+    listModels().then((models) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ models, default: narratorInfo.model }));
+    });
+    return;
+  }
   if (url.startsWith("/assets/")) {
     const f = resolveSafe(ASSETS, url.slice("/assets/".length));
     if (f) return sendFile(res, f);
@@ -205,6 +222,7 @@ wss.on("connection", (ws) => {
       const sr = new Room(DEFAULT_DECK);
       sr.solo = true;
       sr.theme = String(msg.theme || "").slice(0, 120);
+      if (msg.model) sr.model = String(msg.model).slice(0, 100);
       sr.sockets.set(connId, ws);
       soloRooms.set(connId, sr);
       sr.game.join(`sys-${connId}`, { name: "Incident Master", role: "gm" });

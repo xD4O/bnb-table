@@ -8,22 +8,34 @@ const assetUrl = (p) => (p ? "/assets/" + p : "");
 const modStr = (m) => (m ? (m > 0 ? ` +${m}` : ` ${m}`) : "");
 
 let ws, state = null, joined = false, begun = false;
-let animatedRollTs = null, lastNarrativeLen = 0, awaitingNarrative = false;
+let animatedRollTs = null, awaitingNarrative = false;
+let narr = []; // { id, text } — client narrative list (committed + streaming)
+let seeded = false;
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => { if (begun) sendBegin(); };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === "state") { state = msg.state; if (joined || begun) { joined = true; show(); render(); } }
-    else if (msg.type === "error") { $("join-err").textContent = msg.error; }
+    if (msg.type === "state") {
+      state = msg.state;
+      if (!seeded && state.narrative?.length) { narr = state.narrative.map((m) => ({ id: "s" + m.id, text: m.text })); seeded = true; }
+      if (joined || begun) { joined = true; seeded = true; show(); render(); }
+    } else if (msg.type === "narrate") {
+      const e = narr.find((x) => x.id === msg.id);
+      if (e) e.text = msg.text; else narr.push({ id: msg.id, text: msg.text });
+      awaitingNarrative = false;
+      renderNarrative();
+    } else if (msg.type === "error") {
+      $("join-err").textContent = msg.error;
+    }
   };
   ws.onclose = () => setTimeout(connect, 1000);
 }
 const sendRaw = (o) => ws.readyState === 1 && ws.send(JSON.stringify(o));
 
 function sendBegin() {
-  sendRaw({ type: "joinSolo", name: $("name").value.trim() || "Analyst", theme: $("theme").value.trim() });
+  sendRaw({ type: "joinSolo", name: $("name").value.trim() || "Analyst", theme: $("theme").value.trim(), model: $("model").value || undefined });
 }
 
 function show() { $("join").hidden = true; $("board").hidden = false; }
@@ -64,9 +76,8 @@ function renderBanner() {
 
 function renderNarrative() {
   const el = $("narrative");
-  const n = state.narrative || [];
-  el.innerHTML = n.map((m) => `<p class="narr">${escapeHtml(m.text)}</p>`).join("");
-  if (n.length > lastNarrativeLen) { lastNarrativeLen = n.length; awaitingNarrative = false; el.scrollTop = el.scrollHeight; }
+  el.innerHTML = narr.map((m) => `<p class="narr">${escapeHtml(m.text)}</p>`).join("");
+  el.scrollTop = el.scrollHeight;
   $("narrating").hidden = !awaitingNarrative;
 }
 
@@ -171,14 +182,25 @@ function escapeHtml(s) {
 
 $("begin").addEventListener("click", () => {
   if (!$("name").value.trim()) { $("join-err").textContent = "Enter a name first"; return; }
-  begun = true; sendBegin();
+  begun = true; awaitingNarrative = true; sendBegin();
 });
 $("roll-btn").addEventListener("click", () => {
   awaitingNarrative = true;
   $("narrating").hidden = false;
   sendRaw({ type: "roll", procedureId: $("proc-select").value, modifier: Number($("modifier").value) || 0 });
 });
-$("new-incident").addEventListener("click", () => { lastNarrativeLen = 0; sendRaw({ type: "newIncident" }); });
+$("new-incident").addEventListener("click", () => {
+  narr = []; awaitingNarrative = true; $("narrating").hidden = false; renderNarrative();
+  sendRaw({ type: "newIncident" });
+});
+
+// populate the Incident Master model picker from Ollama (graceful if none)
+fetch("/api/models").then((r) => r.json()).then(({ models, default: def }) => {
+  const sel = $("model");
+  const list = models && models.length ? models : (def ? [def] : []);
+  if (!list.length) { sel.innerHTML = `<option value="">built-in fallback (Ollama offline)</option>`; return; }
+  sel.innerHTML = list.map((m) => `<option value="${m}" ${m === def ? "selected" : ""}>${m}</option>`).join("");
+}).catch(() => { $("model").innerHTML = `<option value="">default</option>`; });
 
 // lightbox
 (function lightbox() {

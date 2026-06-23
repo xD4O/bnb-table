@@ -83,26 +83,69 @@ function fallback(kind, ctx = {}) {
   return arr[idx];
 }
 
-export async function narrate(kind, ctx = {}) {
+// Narrate a moment. If `onToken(textChunk)` is supplied, streams from Ollama and calls
+// it per chunk (typewriter); returns the full text. ctx.model overrides the default model.
+export async function narrate(kind, ctx = {}, onToken) {
+  const streaming = typeof onToken === "function";
   try {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: MODEL,
+        model: ctx.model || MODEL,
         system: SYSTEM,
         prompt: buildPrompt(kind, ctx),
-        stream: false,
+        stream: streaming,
         options: { temperature: 0.85, num_predict: 220 },
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(60000),
     });
     if (!res.ok) throw new Error(`ollama ${res.status}`);
-    const data = await res.json();
-    const text = (data.response || "").trim();
-    return text || fallback(kind, ctx);
+
+    if (!streaming) {
+      const data = await res.json();
+      return (data.response || "").trim() || fallback(kind, ctx);
+    }
+
+    // Stream NDJSON: each line is {response, done}.
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "", full = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const j = JSON.parse(line);
+          if (j.response) { full += j.response; onToken(j.response); }
+        } catch {}
+      }
+    }
+    const text = full.trim();
+    if (text) return text;
+    const fb = fallback(kind, ctx);
+    onToken(fb);
+    return fb;
   } catch {
-    return fallback(kind, ctx);
+    const fb = fallback(kind, ctx);
+    if (streaming) onToken(fb); // still surface it in the typewriter pane
+    return fb;
+  }
+}
+
+export async function listModels() {
+  try {
+    const res = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return [];
+    const d = await res.json();
+    return (d.models || []).map((m) => m.name);
+  } catch {
+    return [];
   }
 }
 
