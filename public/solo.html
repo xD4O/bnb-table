@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backdoors &amp; Breaches — Solo (AI Incident Master)</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="join" class="overlay">
+      <div class="join-card">
+        <h1>Solo Incident</h1>
+        <p class="sub">You are the lone analyst. An AI Incident Master narrates the breach.</p>
+        <label>Your name<input id="name" maxlength="40" placeholder="e.g. Analyst" /></label>
+        <label>Scenario flavor <span style="opacity:.6">(optional)</span>
+          <input id="theme" maxlength="120" placeholder="e.g. a regional hospital, a fintech startup…" />
+        </label>
+        <button class="role-btn gm" id="begin"><strong>▶ Begin incident</strong><span>The IM will set the scene</span></button>
+        <p class="err" id="join-err"></p>
+      </div>
+    </div>
+
+    <div id="board" hidden>
+      <header id="topbar">
+        <div class="brand">B&amp;B <span>Solo</span> <span id="deck-name"></span></div>
+        <div id="trackers">
+          <span class="track" id="t-turn">Turn —</span>
+          <span class="track" id="t-left">⏳ — left</span>
+          <span class="track ok" id="t-succ">Detected 0/4</span>
+          <span class="track bad" id="t-fail">Failures 0</span>
+          <span class="track" id="t-mod" hidden></span>
+          <span class="track" id="t-phase"></span>
+          <button class="gm-btn" id="new-incident" style="margin-left:.5rem">↺ New incident</button>
+        </div>
+      </header>
+
+      <div id="banner" hidden></div>
+
+      <section id="narrative-sec">
+        <h2>🎙️ Incident Master</h2>
+        <div id="narrative"></div>
+        <div id="narrating" hidden>…the Incident Master is thinking…</div>
+      </section>
+
+      <section id="objectives">
+        <h2>Attack Chain <small>(detect all four to win)</small></h2>
+        <div class="slot-row" id="slot-row"></div>
+      </section>
+
+      <section id="lastroll" hidden></section>
+
+      <div class="columns">
+        <section id="procedures-sec">
+          <h2>Procedures <small>(established highlighted · click a card to enlarge)</small></h2>
+          <div class="proc-row" id="procedures-row"></div>
+          <div id="roll-controls">
+            <h3>Run a Procedure</h3>
+            <select id="proc-select"></select>
+            <label class="mod">Modifier <input id="modifier" type="number" value="0" step="1" /></label>
+            <button id="roll-btn" class="primary">🎲 Roll d20</button>
+          </div>
+          <div id="played"></div>
+        </section>
+        <aside id="side">
+          <section id="logsec"><h2>Activity Log</h2><ul id="log"></ul></section>
+        </aside>
+      </div>
+    </div>
+
+    <div id="lightbox" class="lb" hidden>
+      <button id="lb-close" aria-label="Close">✕</button>
+      <img id="lb-img" alt="card" />
+    </div>
+
+    <script type="module" src="/solo.js"></script>
+  </body>
+</html>

@@ -212,6 +212,51 @@ test("without a detection map, a success with one card left auto-reveals it", ()
   assert.equal(game.state.phase, "won");
 });
 
+// --- solo mode -------------------------------------------------------------
+
+test("solo mode reveals the attack chain in order on each success", () => {
+  const game = makeGame([15, 15, 15, 15]);
+  game.join("gm1", { name: "IM", role: "gm" });
+  game.join("p0", { name: "Solo", role: "player" });
+  fixedSetup(game);
+  game.setMode("solo");
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  assert.equal(game.start({}, "gm1").ok, true);
+  assert.equal(game.state.mode, "solo");
+
+  game.roll({ connId: "p0", procedureId: "procedure-1" });
+  assert.equal(game.state.revealed.initial, true);
+  assert.equal(game.state.revealed.pivot, false);
+  game.roll({ connId: "p0", procedureId: "procedure-2" });
+  assert.equal(game.state.revealed.pivot, true);
+  game.roll({ connId: "p0", procedureId: "procedure-3" });
+  assert.equal(game.state.revealed.c2, true);
+  game.roll({ connId: "p0", procedureId: "procedure-4" });
+  assert.equal(game.state.revealed.persist, true);
+  assert.equal(game.state.phase, "won");
+});
+
+test("solo mode: a failed roll reveals nothing", () => {
+  const game = makeGame([3]);
+  game.join("gm1", { name: "IM", role: "gm" });
+  game.join("p0", { name: "Solo", role: "player" });
+  fixedSetup(game);
+  game.setMode("solo");
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.start({}, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 3 < 11
+  assert.equal(game.state.successes, 0);
+  assert.equal(game.state.revealed.initial, false);
+});
+
+test("narrative entries are recorded and projected", () => {
+  const game = makeGame();
+  game.setMode("solo");
+  game.addNarrative("The SOC phone rings at 3am.");
+  assert.equal(game.state.narrative.length, 1);
+  assert.equal(game.project("player").narrative[0].text, "The SOC phone rings at 3am.");
+});
+
 // --- auto-inject on natural 1 / 20 -----------------------------------------
 
 test("a natural 20 auto-plays an inject", () => {

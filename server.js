@@ -13,7 +13,8 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import os from "node:os";
 import { WebSocketServer } from "ws";
-import { Game } from "./src/game.js";
+import { Game, SLOTS } from "./src/game.js";
+import { narrate, narratorInfo } from "./src/narrator.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -80,7 +81,55 @@ class Room {
   }
 }
 
-const room = new Room(process.env.BNB_DECK || "CoreV3.1");
+const DEFAULT_DECK = process.env.BNB_DECK || "CoreV3.1";
+const teamRoom = new Room(DEFAULT_DECK);
+const soloRooms = new Map(); // connId -> Room (one private solo game per player)
+const roomFor = (connId) => soloRooms.get(connId) || teamRoom;
+
+// --- solo narration helpers -------------------------------------------------
+
+function chainCtx(game) {
+  return SLOTS.map((s) => ({
+    stage: s,
+    name: game.byId.get(game.state.objective[s])?.name || "?",
+    revealed: game.state.revealed[s],
+  }));
+}
+
+async function narrateInto(room, kind, extra = {}) {
+  const g = room.game;
+  const text = await narrate(kind, { chain: chainCtx(g), theme: room.theme, turn: g.state.turn, ...extra });
+  g.addNarrative(text);
+  room.broadcast();
+}
+
+// After a solo roll: narrate the outcome, then any inject, then win/lose.
+async function narrateSoloRoll(room, before, beforeInjects) {
+  const g = room.game;
+  const roll = g.state.lastRoll;
+  const newStage = SLOTS.find((s) => !before[s] && g.state.revealed[s]);
+  const extra = { procedure: roll.procedureName, total: roll.total, threshold: roll.threshold };
+  if (newStage) await narrateInto(room, "success", { ...extra, stage: newStage, card: g.byId.get(g.state.objective[newStage])?.name });
+  else if (roll.success) await narrateInto(room, "nodetect", extra);
+  else await narrateInto(room, "failure", extra);
+  if (g.state.playedInjects.length > beforeInjects) {
+    const last = g.state.playedInjects[g.state.playedInjects.length - 1];
+    await narrateInto(room, "inject", { inject: g.byId.get(last)?.name });
+  }
+  if (g.state.phase === "won") await narrateInto(room, "win");
+  else if (g.state.phase === "lost") await narrateInto(room, "lose");
+}
+
+function startSoloIncident(room, connId) {
+  const sysId = `sys-${connId}`;
+  const g = room.game;
+  g.reset(sysId);
+  g.setup({}, sysId); // random attack chain + established procedures
+  g.setMode("solo");
+  g.start({ force: true }, sysId);
+  room.broadcast();
+  narrateInto(room, "intro"); // async; streams in shortly after
+}
 
 // --- static file server -----------------------------------------------------
 
@@ -117,6 +166,7 @@ function resolveSafe(root, urlPath) {
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/" || url === "/gm") return sendFile(res, join(PUBLIC, "index.html"));
+  if (url === "/solo") return sendFile(res, join(PUBLIC, "solo.html"));
   if (url.startsWith("/assets/")) {
     const f = resolveSafe(ASSETS, url.slice("/assets/".length));
     if (f) return sendFile(res, f);
@@ -138,7 +188,7 @@ function send(ws, obj) {
 
 wss.on("connection", (ws) => {
   const connId = `c${nextId++}`;
-  room.sockets.set(connId, ws);
+  teamRoom.sockets.set(connId, ws);
 
   ws.on("message", (raw) => {
     let msg;
@@ -147,6 +197,28 @@ wss.on("connection", (ws) => {
     } catch {
       return;
     }
+
+    // Solo: move this socket into its own private game, then auto-start an incident.
+    if (msg.type === "joinSolo") {
+      teamRoom.sockets.delete(connId);
+      teamRoom.game.leave(connId);
+      const sr = new Room(DEFAULT_DECK);
+      sr.solo = true;
+      sr.theme = String(msg.theme || "").slice(0, 120);
+      sr.sockets.set(connId, ws);
+      soloRooms.set(connId, sr);
+      sr.game.join(`sys-${connId}`, { name: "Incident Master", role: "gm" });
+      sr.game.join(connId, { name: msg.name, role: "player" });
+      startSoloIncident(sr, connId);
+      return;
+    }
+    if (msg.type === "newIncident") {
+      const sr = soloRooms.get(connId);
+      if (sr) startSoloIncident(sr, connId);
+      return;
+    }
+
+    const room = roomFor(connId);
     const g = room.game;
     let r = { ok: true };
 
@@ -173,9 +245,17 @@ wss.on("connection", (ws) => {
       case "start":
         r = g.start({ force: !!msg.force }, connId);
         break;
-      case "roll":
+      case "roll": {
+        const before = room.solo ? { ...g.state.revealed } : null;
+        const beforeInjects = room.solo ? g.state.playedInjects.length : 0;
         r = g.roll({ connId, procedureId: msg.procedureId, modifier: msg.modifier });
+        if (room.solo && r.ok) {
+          room.broadcast(); // show the roll/animation immediately
+          narrateSoloRoll(room, before, beforeInjects); // narration streams in after
+          return;
+        }
         break;
+      }
       case "reveal":
         r = g.reveal({ slot: msg.slot }, connId);
         break;
@@ -213,15 +293,17 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
+    const room = roomFor(connId);
     room.sockets.delete(connId);
     room.game.leave(connId);
-    room.broadcast();
+    if (room.solo) soloRooms.delete(connId);
+    else room.broadcast();
   });
 
   // initial state so the picker can show live seat counts before joining
   send(ws, { type: "hello", connId });
-  const proj = room.game.project("viewer");
-  proj.you = { role: null, deck: room.deck, decks: room.decks };
+  const proj = teamRoom.game.project("viewer");
+  proj.you = { role: null, deck: teamRoom.deck, decks: teamRoom.decks };
   send(ws, { type: "state", state: proj });
 });
 
@@ -241,7 +323,9 @@ server.listen(PORT, () => {
   console.log(`Players / Viewers:  http://localhost:${PORT}/`);
   for (const ip of ips) console.log(`  on your network:   http://${ip}:${PORT}/   (share this on Wi-Fi)`);
   console.log(`Game Master:        http://localhost:${PORT}/gm`);
+  console.log(`Solo (vs AI IM):    http://localhost:${PORT}/solo`);
   console.log(`Game Master PIN:    ${GM_PIN}   ${process.env.BNB_PIN ? "(from BNB_PIN)" : "(random — set BNB_PIN to fix it)"}`);
-  console.log(`Decks available:    ${room.decks.join(", ")}`);
+  console.log(`Decks available:    ${teamRoom.decks.join(", ")}`);
+  console.log(`Narrator (Ollama):  ${narratorInfo.model} @ ${narratorInfo.url}  (falls back to templates if offline)`);
   console.log("===========================================\n");
 });

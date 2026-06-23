@@ -165,6 +165,20 @@ section { padding: 1rem 1.2rem; }
 .gm-btn.danger { border-color: var(--bad); color: var(--bad); }
 .warn { color: var(--gold); font-size: .85rem; }
 
+/* solo narrative panel */
+#narrative-sec { max-width: 1440px; margin: .5rem auto; }
+#narrative {
+  background: linear-gradient(180deg, #12161f, #0d1117); border: 1px solid var(--line);
+  border-left: 3px solid var(--gold); border-radius: 12px; padding: .6rem 1rem;
+  max-height: 34vh; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,.3);
+}
+#narrative .narr { margin: .5rem 0; line-height: 1.55; font-size: 1.02rem; }
+#narrative .narr:first-child { margin-top: .2rem; }
+#narrative .narr:last-child { color: var(--ink); }
+#narrative .narr:not(:last-child) { color: var(--muted); }
+#narrating { color: var(--gold); font-style: italic; padding: .4rem .2rem; animation: pulseText 1.2s ease-in-out infinite; }
+@keyframes pulseText { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+
 /* chat */
 #chatsec { display: flex; flex-direction: column; }
 #chat-scope { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; }

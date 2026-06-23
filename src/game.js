@@ -39,6 +39,8 @@ export class Game {
   freshState() {
     return {
       deck: this.catalog.deckTitle,
+      mode: "team", // "team" | "solo"
+      narrative: [], // RPG narration entries { id, text } (solo mode)
       phase: "setup",
       config: { ...DEFAULT_CONFIG },
       capacity: { ...DEFAULT_CAPACITY },
@@ -284,14 +286,27 @@ export class Game {
     return ok({ roll: this.state.lastRoll });
   }
 
-  // Which unrevealed slots this procedure can reveal. With a detection map, only
-  // the matching cards; without one, all unrevealed slots (GM-judged).
+  // Which unrevealed slots this procedure can reveal. Solo mode: the next stage in
+  // chain order (one option, so it auto-reveals). Team: detection-map matches, or all
+  // unrevealed when no map is set.
   revealOptions(procedureId) {
     const unrevealed = SLOTS.filter((s) => !this.state.revealed[s]);
+    if (this.state.mode === "solo") return unrevealed.slice(0, 1);
     const det = this.state.detection || {};
     const hasMap = Object.values(det).some((arr) => arr && arr.length);
     if (hasMap) return unrevealed.filter((s) => (det[s] || []).includes(procedureId));
     return unrevealed;
+  }
+
+  setMode(mode) {
+    this.state.mode = mode === "solo" ? "solo" : "team";
+  }
+
+  addNarrative(text) {
+    const t = String(text || "").trim().slice(0, 4000);
+    if (!t) return;
+    this.state.narrative.push({ id: this.state.narrative.length + 1, text: t });
+    if (this.state.narrative.length > 100) this.state.narrative.shift();
   }
 
   _autoInject(die) {
@@ -446,6 +461,8 @@ export class Game {
 
     const base = {
       deck: s.deck,
+      mode: s.mode,
+      narrative: s.narrative,
       phase: s.phase,
       config: s.config,
       capacity: s.capacity,
