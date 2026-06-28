@@ -64,10 +64,13 @@ Below the player minimum the GM can still **Force start** (for testing/demos).
    - 4 **Established** procedures;
    - an optional **detection map** (which procedures detect each attack card — read off the
      card art) that enables auto-reveal;
-   - **rules** (all GM-editable, with defaults): turn limit `10`, established success `≥11`,
-     not-established success `≥17`, inject nudge after `3` fails, **cooldown `3` turns**.
+   - **rules** (all GM-editable, with defaults): turn limit `10`, success threshold `≥17`,
+     **Established bonus `+6`** added to the roll, inject nudge after `3` fails, **cooldown `3` turns**.
 2. **Defenders** pick a Procedure and **roll d20** (the result die animates). Established
-   procedures succeed on 11+, others on 17+. A `±modifier` field is available too.
+   the d20 result animates. The total is `d20 + Established bonus (if established) + modifiers`
+   and succeeds at the threshold — so with the defaults an Established procedure effectively
+   needs 11+ and others 17+, but the bonus is now added visibly to the roll. A `±modifier`
+   field is available too, and a negative inject modifier subtracts from the total (bonus included).
 3. **Detection / reveal** on a success:
    - with a detection map: the matching card auto-reveals; if several match, the GM is
      prompted to choose; if none match, nothing is revealed;

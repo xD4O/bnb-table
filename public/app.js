@@ -222,7 +222,7 @@ function renderLastRoll() {
   el.innerHTML =
     `<div class="die${crit}">${r.d20}</div>` +
     `<div class="roll-text"><strong>${r.playerName} ran “${r.procedureName}”${r.established ? " (established)" : ""}</strong>` +
-    `<div class="meta">d20 ${r.d20}${modStr(r.modifier)}${r.activeModifier ? `${modStr(r.activeModifier)} (inject)` : ""} = ${r.total} vs ${r.threshold} → ` +
+    `<div class="meta">d20 ${r.d20}${r.establishedBonus ? `${modStr(r.establishedBonus)} (est)` : ""}${modStr(r.modifier)}${r.activeModifier ? `${modStr(r.activeModifier)} (inject)` : ""} = ${r.total} vs ${r.threshold} → ` +
     `${r.success ? "SUCCESS" : "no detection"}${r.d20 === 20 ? " · NAT 20!" : r.d20 === 1 ? " · NAT 1!" : ""}</div></div>`;
   // animate only when this is a brand-new roll
   if (r.ts !== animatedRollTs) { animatedRollTs = r.ts; animateDie(el.querySelector(".die"), r.d20); }
@@ -359,8 +359,8 @@ function renderGmPanel() {
 
     html += `<div class="gm-block"><h3>3 · Rules</h3><div class="gm-row">
       <label>Turn limit<input type="number" id="cfg-turnLimit" value="${s.config.turnLimit}"/></label>
-      <label>Established ≥<input type="number" id="cfg-establishedThreshold" value="${s.config.establishedThreshold}"/></label>
-      <label>Not-est ≥<input type="number" id="cfg-unestablishedThreshold" value="${s.config.unestablishedThreshold}"/></label>
+      <label>Success ≥<input type="number" id="cfg-successThreshold" value="${s.config.successThreshold}"/></label>
+      <label>Established +<input type="number" id="cfg-establishedBonus" min="0" value="${s.config.establishedBonus}"/></label>
       <label>Inject nudge<input type="number" id="cfg-injectNudgeAfterFails" value="${s.config.injectNudgeAfterFails}"/></label>
       <label>Cooldown turns<input type="number" id="cfg-cooldownTurns" min="0" value="${s.config.cooldownTurns}"/></label>
       <button class="gm-btn" id="gm-cfg">Save rules</button></div>
@@ -429,7 +429,7 @@ function wireGmPanel() {
 }
 
 function readCfg(prefix) {
-  const keys = ["turnLimit", "establishedThreshold", "unestablishedThreshold", "injectNudgeAfterFails", "cooldownTurns"];
+  const keys = ["turnLimit", "successThreshold", "establishedBonus", "injectNudgeAfterFails", "cooldownTurns"];
   const out = {};
   for (const k of keys) { const el = $(prefix + k); if (el) out[k] = Number(el.value); }
   return out;

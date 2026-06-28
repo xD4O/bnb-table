@@ -112,11 +112,44 @@ test("not-established procedure uses the 17 threshold", () => {
   assert.equal(game.state.lastRoll.success, true);
 });
 
-test("GM config edits change roll thresholds", () => {
-  const game = makeGame([15]);
+test("an established procedure adds its bonus to the roll total", () => {
+  const game = makeGame([10]);
   startGame(game);
-  game.setConfig({ establishedThreshold: 15 }, "gm1");
-  game.roll({ connId: "p0", procedureId: "procedure-1" }); // die 15 >= 15 -> success
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // established
+  const r = game.state.lastRoll;
+  assert.equal(r.established, true);
+  assert.equal(r.establishedBonus, 6); // default
+  assert.equal(r.total, 16); // d20 10 + 6
+});
+
+test("a non-established procedure gets no bonus", () => {
+  const game = makeGame([10]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-5" }); // not established
+  const r = game.state.lastRoll;
+  assert.equal(r.establishedBonus, 0);
+  assert.equal(r.total, 10);
+});
+
+test("an inject modifier subtracts from an established roll's total (bonus included)", () => {
+  const game = makeGame([10]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0 }, "gm1");
+  game.setModifier({ value: -3 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 10 + 6 (est) - 3 (inject) = 13
+  assert.equal(game.state.lastRoll.total, 13);
+});
+
+test("GM config edits change the bonus and threshold", () => {
+  const game = makeGame([15, 15]);
+  startGame(game);
+  game.setConfig({ cooldownTurns: 0, successThreshold: 25, establishedBonus: 6 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 15 + 6 = 21 < 25 -> fail
+  assert.equal(game.state.lastRoll.success, false);
+  game.setConfig({ successThreshold: 20 }, "gm1");
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 15 + 6 = 21 >= 20 -> success
   assert.equal(game.state.lastRoll.success, true);
 });
 
@@ -293,9 +326,9 @@ test("active roll modifier is applied to every roll", () => {
   startGame(game);
   game.setConfig({ cooldownTurns: 0 }, "gm1");
   game.setModifier({ value: -3 }, "gm1");
-  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 13 - 3 = 10, established needs 11
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 13 + 6 (est) - 3 = 16, threshold 17
   assert.equal(game.state.lastRoll.activeModifier, -3);
-  assert.equal(game.state.lastRoll.total, 10);
+  assert.equal(game.state.lastRoll.total, 16);
   assert.equal(game.state.lastRoll.success, false);
 });
 
@@ -305,8 +338,8 @@ test("playing an inject can set the active roll modifier", () => {
   game.setConfig({ cooldownTurns: 0 }, "gm1");
   game.playInject({ cardId: "inject-1", modifier: -3 }, "gm1");
   assert.equal(game.state.activeModifier, -3);
-  game.roll({ connId: "p0", procedureId: "procedure-1" });
-  assert.equal(game.state.lastRoll.total, 10);
+  game.roll({ connId: "p0", procedureId: "procedure-1" }); // 13 + 6 (est) - 3 = 16
+  assert.equal(game.state.lastRoll.total, 16);
 });
 
 test("the active modifier stacks with a per-roll modifier", () => {
@@ -314,9 +347,9 @@ test("the active modifier stacks with a per-roll modifier", () => {
   startGame(game);
   game.setConfig({ cooldownTurns: 0 }, "gm1");
   game.setModifier({ value: -3 }, "gm1");
-  game.roll({ connId: "p0", procedureId: "procedure-1", modifier: 2 }); // 13 + 2 - 3 = 12
-  assert.equal(game.state.lastRoll.total, 12);
-  assert.equal(game.state.lastRoll.success, true);
+  game.roll({ connId: "p0", procedureId: "procedure-1", modifier: 2 }); // 13 + 6 (est) + 2 - 3 = 18
+  assert.equal(game.state.lastRoll.total, 18);
+  assert.equal(game.state.lastRoll.success, true); // >= 17
 });
 
 test("only the GM can change the active modifier", () => {

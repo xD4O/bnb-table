@@ -9,14 +9,14 @@ const SLOT_TYPE = { initial: "initial", pivot: "pivot", c2: "c2", persist: "pers
 
 const DEFAULT_CONFIG = {
   turnLimit: 10,
-  establishedThreshold: 11,
-  unestablishedThreshold: 17,
+  successThreshold: 17, // a roll succeeds when (d20 + established bonus + modifiers) >= this
+  establishedBonus: 6, // points added to the roll when the procedure is Established
   injectNudgeAfterFails: 3,
   cooldownTurns: 3, // house rule: a procedure is locked for this many turns after use (0 = off)
 };
 
 // Config keys that may legitimately be 0 (everything else must be >= 1).
-const ZERO_OK = new Set(["cooldownTurns"]);
+const ZERO_OK = new Set(["cooldownTurns", "establishedBonus"]);
 
 const DEFAULT_CAPACITY = { gm: 2, playerMin: 1, playerMax: 5 };
 
@@ -226,13 +226,12 @@ export class Game {
     }
 
     const established = this.state.established.includes(procedureId);
-    const threshold = established
-      ? this.state.config.establishedThreshold
-      : this.state.config.unestablishedThreshold;
+    const bonus = established ? this.state.config.establishedBonus : 0;
+    const threshold = this.state.config.successThreshold;
     const mod = Math.trunc(Number(modifier) || 0);
     const active = this.state.activeModifier || 0;
     const die = this.d20();
-    const total = die + mod + active;
+    const total = die + bonus + mod + active;
     const success = total >= threshold;
 
     this.state.turn++;
@@ -250,6 +249,7 @@ export class Game {
       procedureName: card.name,
       established,
       d20: die,
+      establishedBonus: bonus,
       modifier: mod,
       activeModifier: active,
       total,
@@ -259,7 +259,7 @@ export class Game {
     };
     const ms = (m) => (m ? (m > 0 ? `+${m}` : `${m}`) : "");
     this.log(
-      `${who} ran "${card.name}" — rolled ${die}${ms(mod)}${active ? `${ms(active)}(inject)` : ""}=${total} vs ${threshold} → ${success ? "SUCCESS" : "no detection"}`
+      `${who} ran "${card.name}" — rolled ${die}${bonus ? `${ms(bonus)}(est)` : ""}${ms(mod)}${active ? `${ms(active)}(inject)` : ""}=${total} vs ${threshold} → ${success ? "SUCCESS" : "no detection"}`
     );
 
     // On a success, figure out which attack card(s) this procedure reveals.

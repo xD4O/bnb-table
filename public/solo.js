@@ -109,7 +109,7 @@ function renderLastRoll() {
   el.innerHTML =
     `<div class="die${crit}">${r.d20}</div>` +
     `<div class="roll-text"><strong>You ran “${r.procedureName}”${r.established ? " (established)" : ""}</strong>` +
-    `<div class="meta">d20 ${r.d20}${modStr(r.modifier)}${r.activeModifier ? `${modStr(r.activeModifier)} (inject)` : ""} = ${r.total} vs ${r.threshold} → ` +
+    `<div class="meta">d20 ${r.d20}${r.establishedBonus ? `${modStr(r.establishedBonus)} (est)` : ""}${modStr(r.modifier)}${r.activeModifier ? `${modStr(r.activeModifier)} (inject)` : ""} = ${r.total} vs ${r.threshold} → ` +
     `${r.success ? "SUCCESS" : "no detection"}${r.d20 === 20 ? " · NAT 20!" : r.d20 === 1 ? " · NAT 1!" : ""}</div></div>`;
   if (r.ts !== animatedRollTs) { animatedRollTs = r.ts; animateDie(el.querySelector(".die"), r.d20); }
 }
