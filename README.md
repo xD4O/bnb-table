@@ -96,9 +96,15 @@ startup"), and **Begin**. The server:
   order, and the AI narrates **what you found** and hints at the next step; a **failure** gets a
   realistic in-world **reason** it turned up nothing; injects and win/lose are narrated too.
 
+Every incident gets a **freshly randomized brief** — sector, threat actor, tooling, and a
+consistent set of IOCs (attacker IP, C2 domain/port, file hash, compromised account, host,
+CVE, MITRE ATT&CK techniques) — which the narrator weaves through the whole story. Combined
+with a random model seed and the running story-so-far, no two games narrate alike. Pick the
+narrator model on the start screen.
+
 Solo progression is deterministic, so the game is fully playable **even if Ollama isn't
-running** — narration just falls back to built-in templated flavor text. `↺ New incident`
-starts a fresh scenario.
+running** — narration falls back to IOC-filled templates (still randomized per game). `↺ New
+incident` starts a fresh scenario.
 
 ## Project layout
 

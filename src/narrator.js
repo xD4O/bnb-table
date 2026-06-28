@@ -5,82 +5,117 @@
 // Configure with env: BNB_OLLAMA_URL (default http://localhost:11434),
 // BNB_OLLAMA_MODEL (default qwen2.5:7b).
 
+import { scenarioFacts } from "./scenario.js";
+
 const OLLAMA_URL = process.env.BNB_OLLAMA_URL || "http://localhost:11434";
 const MODEL = process.env.BNB_OLLAMA_MODEL || "qwen2.5:7b";
+const ri = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const rpick = (a) => a[Math.floor(Math.random() * a.length)];
 
 const SYSTEM = `You are the Incident Master narrating a cybersecurity incident-response tabletop RPG
-(based on Black Hills InfoSec's "Backdoors & Breaches"). You speak to a lone blue-team
-analyst. Write vivid, realistic SOC narration in 2-4 short sentences, second person ("you").
-Use authentic infosec detail (logs, EDR, SIEM, DNS, C2, persistence). Stay in character —
-no markdown, no preamble, no lists. Never reveal attacker techniques the analyst has not yet
-detected; you may hint atmospherically.`;
+(based on Black Hills InfoSec's "Backdoors & Breaches"). You speak to a lone blue-team analyst in
+second person ("you"). Write vivid, technically authentic SOC narration in 2-4 short sentences.
+
+Hard rules:
+- Use CONCRETE artifacts from the provided scenario facts: the attacker IP, C2 domain/port, file
+  hash, compromised account, hostnames, CVE, and MITRE ATT&CK techniques. Invent extra realistic
+  detail (log source names, process trees, registry keys, ports) as needed.
+- VARY your wording every time. Never reuse a stock opening like "the logs light up", "the SIEM
+  dashboard lights up", or "something isn't right". Open differently each call.
+- Continue the ongoing story; do not restate earlier sentences.
+- Never name attacker techniques the analyst has not yet detected — hint only.
+- No markdown, no lists, no preamble, no headings. Just the narration prose.`;
 
 // Build the user prompt for a given narration moment.
 function buildPrompt(kind, ctx = {}) {
-  const chain = (ctx.chain || [])
-    .map((c) => `${c.stage}=${c.revealed ? c.name : "[undetected]"}`)
-    .join(", ");
-  const theme = ctx.theme ? `Organization/theme: ${ctx.theme}.` : "";
+  const facts = ctx.scenario ? `SCENARIO FACTS:\n${scenarioFacts(ctx.scenario)}\n` : "";
+  const recent = ctx.recent ? `STORY SO FAR (continue from here; do NOT repeat its wording):\n"${ctx.recent}"\n` : "";
+  const nonce = `Variation token ${ctx.nonce ?? ri(1000, 9999)} — make this narration unique.`;
+  const head = `${facts}${recent}${nonce}\n`;
+  const i = ctx.scenario?.iocs || {};
   switch (kind) {
     case "intro":
-      return `${theme} A new incident is opening. The full (hidden) attack chain is: ${(ctx.chain || [])
-        .map((c) => `${c.stage}=${c.name}`)
-        .join(", ")}. Do NOT name these techniques. Set the scene: how the organization first
-        notices something is wrong, and the unease in the SOC. 3-4 sentences.`;
+      return `${head}A new incident is opening at this organization. Write a UNIQUE cold open: how the
+        team first notices trouble, anchored on ONE or TWO concrete early indicators (e.g. attacker IP
+        ${i.ip || ""} or odd auth on "${i.account || "an account"}"). Build dread without naming the
+        deeper attack stages. 3-4 sentences.`;
     case "success":
-      return `${theme} The analyst ran the procedure "${ctx.procedure}" and SUCCEEDED (rolled
-        ${ctx.total} vs ${ctx.threshold}). This detected the ${ctx.stage} stage of the attack:
-        "${ctx.card}". Narrate what they uncovered, tie it specifically to "${ctx.procedure}",
-        and hint at a plausible next investigative step. 2-3 sentences.`;
+      return `${head}The analyst ran "${ctx.procedure}" and SUCCEEDED (rolled ${ctx.total} vs
+        ${ctx.threshold}), detecting the ${ctx.stage} stage: "${ctx.card}". Narrate the specific
+        artifacts uncovered — tie them to "${ctx.procedure}" and to the scenario IOCs (a log line, a
+        process tree, the hash, a beacon to ${i.c2 || "the C2"}). End with a concrete hint toward the
+        next move. 2-3 sentences.`;
     case "nodetect":
-      return `${theme} The analyst ran "${ctx.procedure}" and it SUCCEEDED mechanically but found
-        nothing new this round. Briefly narrate a dead end that still feels productive. 1-2 sentences.`;
+      return `${head}The analyst ran "${ctx.procedure}" — it worked but surfaced nothing new this
+        round. Narrate a specific, believable dead end (a benign-looking artifact ruled out). 1-2 sentences.`;
     case "failure":
-      return `${theme} The analyst ran "${ctx.procedure}" and it FAILED (rolled ${ctx.total} vs
-        ${ctx.threshold}). Give a concrete, believable real-world reason the investigation hit a
-        wall — e.g. the EDR license lapsed, those logs were never forwarded to the SIEM, the
-        retention window already rolled off, a sensor was misconfigured, or alert fatigue buried
-        it. 2 sentences. Current state: ${chain}.`;
+      return `${head}The analyst ran "${ctx.procedure}" and it FAILED (rolled ${ctx.total} vs
+        ${ctx.threshold}). Give a CONCRETE, varied real-world reason it hit a wall — choose a specific
+        gap: that log source was never onboarded to the SIEM, no EDR agent on ${i.host || "that host"},
+        NetFlow retention already rolled off, a proxy bypass hid traffic to ${i.c2 || "the C2"}, a
+        misconfigured sensor, MFA fatigue, etc. Do NOT reuse a reason already in the story so far. 2 sentences.`;
     case "inject":
-      return `${theme} A complication just struck the SOC: "${ctx.inject}". Narrate it landing
-        mid-investigation. 2 sentences.`;
+      return `${head}A complication strikes the SOC: "${ctx.inject}". Narrate it landing
+        mid-investigation, tied to this scenario. 2 sentences.`;
     case "win":
-      return `${theme} The analyst has now detected the entire attack chain and can contain it.
-        Narrate the decisive containment and a beat of relief. 2-3 sentences.`;
+      return `${head}The analyst has detected the full attack chain and can contain it. Narrate the
+        decisive containment (blocking ${i.ip || "the attacker IP"}, disabling "${i.account || "the account"}",
+        eviction) and a beat of relief. 2-3 sentences.`;
     case "lose":
-      return `${theme} Time ran out. The attackers completed their objective undetected. Narrate
-        the grim morning-after discovery. 2-3 sentences.`;
+      return `${head}Time ran out; ${ctx.scenario?.actor || "the attackers"} achieved their objective
+        undetected. Narrate the grim morning-after discovery, referencing IOCs that were there all along.
+        2-3 sentences.`;
     default:
-      return `Narrate the current moment in the incident. 2 sentences.`;
+      return `${head}Narrate the current moment in the incident. 2 sentences.`;
   }
 }
 
-// Offline / failure templates — varied by a deterministic-ish index so it isn't identical.
+// Offline templates — filled with the scenario's IOCs and picked at random so they vary
+// game-to-game even without the LLM.
 function fallback(kind, ctx = {}) {
   const p = ctx.procedure || "the procedure";
   const card = ctx.card || "the activity";
+  const i = ctx.scenario?.iocs || {};
+  const ip = i.ip || "an external IP";
+  const c2 = i.c2 ? `${i.c2}:${i.port || 443}` : "an unfamiliar domain";
+  const acct = i.account ? `"${i.account}"` : "a service account";
+  const host = i.host || "a workstation";
+  const hash = i.hash ? i.hash.slice(0, 12) + "…" : "an unknown binary";
   const FB = {
     intro: [
-      "It starts with a ticket nobody wants: scattered alerts, a few odd logins, a help-desk note about a 'slow' laptop. Nothing screams compromise — but the pattern is wrong. You pull up the consoles and start your shift as incident lead.",
+      `It opens quietly: ${acct} authenticates from ${ip} at 02:14, well outside its baseline. Help desk has a ticket about ${host} "running hot," and a perimeter alert flags a trickle of traffic toward ${c2}. None of it is conclusive — but the shape is wrong, and the shift is yours.`,
+      `A threat-intel feed pings on ${ip}; minutes later ${host} spawns a process no one recognizes (${hash}). The on-call is asleep, the queue is full, and the timestamps don't line up with any change ticket. You take point.`,
+      `Billing notices an odd egress spike to ${c2}; meanwhile ${acct} just logged in from two countries an hour apart. Nothing has paged yet, which somehow makes it worse. You open the consoles and start pulling threads.`,
     ],
     success: [
-      `Your ${p} pays off — you surface ${card} in the telemetry. The artifacts line up into a clear lead; follow the trail toward how they moved next.`,
-      `${p} lights up exactly where you hoped. ${card} is now on the board, and it points you deeper into the kill chain.`,
+      `Your ${p} pays off: ${card} surfaces in the telemetry on ${host}, with a clear link back to ${ip}. The artifacts line up — chase how they moved from here.`,
+      `${p} lands. You tie ${card} to beaconing toward ${c2} and the binary ${hash}; the next hop is starting to take shape.`,
+      `${p} confirms ${card} — ${acct} is in the middle of it. Pivot on that account's recent activity to find what they touched next.`,
     ],
-    nodetect: [`${p} comes back clean this round — useful for ruling things out, but the trail stays cold.`],
+    nodetect: [
+      `${p} comes back clean — the one alert resolves to a patch-management job, not the intruder. Useful to rule out, but the trail stays cold.`,
+      `${p} surfaces only noise this round: a noisy scanner and a flapping service. Nothing tied to ${ip}.`,
+    ],
     failure: [
-      `Your ${p} turns up nothing — turns out those logs were never forwarded to the SIEM, so the evidence simply isn't there.`,
-      `${p} stalls: the EDR agent's license lapsed last quarter and was never renewed on that segment, leaving you blind.`,
-      `Dead end. The retention window already rolled off the data you needed, and no one budgeted for longer storage.`,
-      `A sensor on that VLAN was misconfigured during the last migration, so ${p} sees only a fraction of the traffic.`,
+      `Your ${p} turns up nothing — that log source was never onboarded to the SIEM, so the activity on ${host} simply isn't there to find.`,
+      `${p} stalls: no EDR agent was ever deployed to ${host}, leaving you blind to the process tree you needed.`,
+      `Dead end — NetFlow retention already rolled off the window covering the ${c2} traffic, and no one budgeted to extend it.`,
+      `A proxy bypass list quietly whitelisted ${c2}, so ${p} never sees the beacons leaving the network.`,
+      `The sensor on that VLAN was misconfigured during the last migration; ${p} captures only a fraction of the traffic to ${ip}.`,
+      `Alert fatigue buried it — the signal for ${acct} sat unread under 4,000 low-sev alerts.`,
     ],
-    inject: [`A wrench hits the works: "${ctx.inject || "an inject"}." The team scrambles to adapt mid-hunt.`],
-    win: ["The last piece clicks into place. You scope it end to end, cut the attacker's access, and start eviction. The room exhales — this one's contained."],
-    lose: ["The clock beats you. By morning the data's gone and the foothold is entrenched; now it's a recovery problem, not a detection one."],
+    inject: [`A wrench hits the works: "${ctx.inject || "an inject"}." Mid-hunt, the team has to adapt around it while ${ip} keeps moving.`],
+    win: [
+      `The last piece clicks: you block ${ip} at the edge, disable ${acct}, kill the ${c2} beacon, and start eviction. End to end, scoped and contained — the room exhales.`,
+      `You pull it together — ${host} isolated, ${acct} reset, ${c2} sinkholed. The chain is fully mapped and the door is shut.`,
+    ],
+    lose: [
+      `The clock beats you. By morning ${acct} has been used to stage and exfil to ${c2}; ${ip} was in your logs the whole time. Now it's a recovery problem, not a detection one.`,
+      `Time's up — the foothold on ${host} is entrenched and the data's gone. Every IOC was sitting there, just never connected in time.`,
+    ],
   };
   const arr = FB[kind] || ["The investigation continues."];
-  const idx = ((ctx.turn || ctx.seed || 0) % arr.length + arr.length) % arr.length;
-  return arr[idx];
+  return rpick(arr);
 }
 
 // Narrate a moment. If `onToken(textChunk)` is supplied, streams from Ollama and calls
@@ -96,7 +131,8 @@ export async function narrate(kind, ctx = {}, onToken) {
         system: SYSTEM,
         prompt: buildPrompt(kind, ctx),
         stream: streaming,
-        options: { temperature: 0.85, num_predict: 220 },
+        // random seed + higher temperature/top_p + repeat penalty so no two games narrate alike
+        options: { temperature: 0.95, top_p: 0.95, repeat_penalty: 1.2, seed: ri(1, 2_000_000_000), num_predict: 256 },
       }),
       signal: AbortSignal.timeout(60000),
     });

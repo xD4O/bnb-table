@@ -15,6 +15,7 @@ import os from "node:os";
 import { WebSocketServer } from "ws";
 import { Game, SLOTS } from "./src/game.js";
 import { narrate, narratorInfo, listModels } from "./src/narrator.js";
+import { buildScenario } from "./src/scenario.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -103,7 +104,17 @@ async function narrateInto(room, kind, extra = {}) {
   const g = room.game;
   const ws = [...room.sockets.values()][0];
   const id = ++room.narrSeq;
-  const ctx = { chain: chainCtx(g), theme: room.theme, turn: g.state.turn, model: room.model, ...extra };
+  const recent = g.state.narrative.length ? g.state.narrative[g.state.narrative.length - 1].text : "";
+  const ctx = {
+    chain: chainCtx(g),
+    theme: room.theme,
+    scenario: room.scenario,
+    recent,
+    nonce: Math.floor(Math.random() * 1e6),
+    turn: g.state.turn,
+    model: room.model,
+    ...extra,
+  };
   let acc = "";
   await narrate(kind, ctx, (tok) => {
     acc += tok;
@@ -137,6 +148,8 @@ function startSoloIncident(room, connId) {
   g.setup({}, sysId); // random attack chain + established procedures
   g.setMode("solo");
   g.start({ force: true }, sysId);
+  // a fresh randomized incident brief (IOCs, actor, tooling) grounded in this game's chain
+  room.scenario = buildScenario(chainCtx(g).map((c) => c.name), room.theme);
   room.broadcast();
   narrateInto(room, "intro"); // async; streams in shortly after
 }
