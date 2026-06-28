@@ -9,8 +9,8 @@ const SLOT_TYPE = { initial: "initial", pivot: "pivot", c2: "c2", persist: "pers
 
 const DEFAULT_CONFIG = {
   turnLimit: 10,
-  successThreshold: 17, // a roll succeeds when (d20 + established bonus + modifiers) >= this
-  establishedBonus: 6, // points added to the roll when the procedure is Established
+  successThreshold: 14, // a roll succeeds when (d20 + established bonus + modifiers) >= this
+  establishedBonus: 3, // classic +3 added to the roll when the procedure is Established (so established ~11+, others 14+)
   injectNudgeAfterFails: 3,
   cooldownTurns: 3, // house rule: a procedure is locked for this many turns after use (0 = off)
 };
