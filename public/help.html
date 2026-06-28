@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How to Play — Backdoors &amp; Breaches</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="help-wrap">
+      <div class="hero">
+        <h1>Backdoors &amp; Breaches</h1>
+        <p>An incident-response card game. This guide covers every role, how to set up a game, and how to play.</p>
+      </div>
+
+      <nav class="help-nav">
+        <a class="gm-btn" href="#overview">Overview</a>
+        <a class="gm-btn" href="#roles">Roles</a>
+        <a class="gm-btn" href="#setup">Set up a game</a>
+        <a class="gm-btn" href="#play">How to play</a>
+        <a class="gm-btn" href="#rules">Rules reference</a>
+        <a class="gm-btn" href="#solo">Solo mode</a>
+        <a class="gm-btn gold" href="/gm" target="_blank">Open GM</a>
+        <a class="gm-btn" href="/" target="_blank">Open Player/Viewer</a>
+        <a class="gm-btn" href="/solo" target="_blank">Open Solo</a>
+      </nav>
+
+      <!-- OVERVIEW -->
+      <section class="help-card" id="overview">
+        <h2>🎯 The goal</h2>
+        <p>An attacker has breached the organization. The <strong>Incident Master (GM)</strong> secretly holds a
+          four-card <strong>attack chain</strong> — one card from each phase: <em>Initial Compromise → Pivot &amp;
+          Escalate → C2 &amp; Exfil → Persistence</em>. The <strong>Defenders</strong> use <strong>Procedure</strong>
+          cards and roll a d20 to detect those cards.</p>
+        <ul>
+          <li><strong>Defenders win</strong> when all <strong>4</strong> attack cards are detected.</li>
+          <li><strong>Attackers win</strong> if the team runs out of turns first (default <span class="pill">10 turns</span>).</li>
+        </ul>
+        <p>Everyone on the same Wi-Fi opens the table in a browser. The GM's hidden cards are never sent to players or
+          viewers — they only appear when the GM reveals them, so there is nothing to peek at.</p>
+      </section>
+
+      <!-- ROLES -->
+      <section class="help-card" id="roles">
+        <h2>👥 Roles</h2>
+        <div class="role-grid">
+          <div class="role-tile gm">
+            <div class="t">🎴 Game Master</div>
+            <p>Runs the incident. Sees the hidden attack chain, builds the scenario, adjudicates detections, plays
+              Injects &amp; Consultants, and controls the rules. <small>Open <code>/gm</code> · needs the PIN · up to 2 GMs.</small></p>
+          </div>
+          <div class="role-tile def">
+            <div class="t">🛡️ Defender</div>
+            <p>The blue team. Picks a Procedure each turn and rolls the d20 to find the attacker. Chats on the team
+              channel. <small>Open <code>/</code> · 1–5 players, one shared team.</small></p>
+          </div>
+          <div class="role-tile view">
+            <div class="t">👁️ Viewer</div>
+            <p>Spectates the whole board live (great for a projector or stream). Has a separate viewers-only chat.
+              <small>Open <code>/</code> → choose Viewer · unlimited.</small></p>
+          </div>
+        </div>
+        <h3>Chat visibility</h3>
+        <p>Defenders and the GM share the <strong>team</strong> channel; Viewers and the GM share the
+          <strong>viewers</strong> channel. Viewers never see team chat and vice-versa — the GM sees both and can post
+          to either.</p>
+      </section>
+
+      <!-- SETUP -->
+      <section class="help-card" id="setup">
+        <h2>🛠️ Setting up a game (Game Master)</h2>
+        <ol class="steps">
+          <li>Open <code>/gm</code> and enter the <strong>PIN</strong> shown in the server console. You'll land on the board with the GM panel.</li>
+          <li><strong>Pick a deck</strong> (Core v3.1 or the Expansion with Consultants).</li>
+          <li><strong>Build the scenario</strong> — either hit <code>🎲 Randomize whole scenario</code>, or hand-pick:
+            one card for each of the four attack phases, plus <strong>4 Established procedures</strong> (the team's
+            strong suits).</li>
+          <li><em>(Optional)</em> Fill the <strong>Detection map</strong>: for each attack card, choose which procedures
+            would detect it (read the card art). This lets the game <strong>auto-reveal</strong> on a successful, relevant
+            roll instead of you revealing manually.</li>
+          <li><em>(Optional)</em> Tweak the <strong>rules</strong>: turn limit, success threshold, Established bonus,
+            inject nudge, and cooldown.</li>
+          <li>Share the network URL with players/viewers, then press <code>▶ Start incident</code>.
+            <span class="pill">needs ≥1 player, or Force start</span></li>
+        </ol>
+      </section>
+
+      <!-- PLAY -->
+      <section class="help-card" id="play">
+        <h2>🎮 How a turn works</h2>
+        <ol class="steps">
+          <li><strong>Defender picks a Procedure</strong> from the board and clicks <code>🎲 Roll d20</code>. Any card
+            can be enlarged by clicking it.</li>
+          <li><strong>The roll resolves:</strong> <code>d20 + Established bonus (if the procedure is Established) +
+            modifiers</code>. If the total meets the success threshold, it succeeds. The die animates and the math is
+            spelled out.</li>
+          <li><strong>Detection:</strong> on a success the GM reveals the attack card that procedure uncovered. With a
+            detection map the matching card auto-reveals (or the GM chooses if several match); without one the GM judges
+            and reveals manually.</li>
+          <li><strong>Cooldown:</strong> a procedure that was just rolled is locked for a few turns (shows a ❄ badge) so
+            the team has to vary its approach.</li>
+          <li><strong>Injects &amp; Consultants:</strong> the GM can play an Inject (a complication) — and a natural
+            <strong>1 or 20</strong> auto-plays one. An inject can carry a standing roll modifier (e.g. “−3 to all
+            procedures”) that then applies to every roll. Consultants are one-time boosts the GM hands the team.</li>
+          <li><strong>Repeat</strong> until all 4 cards are detected (win) or the turn limit is reached (loss).</li>
+        </ol>
+        <h3>Tips for Defenders</h3>
+        <ul>
+          <li>Lean on your <strong>Established</strong> procedures — they add the bonus to your roll.</li>
+          <li>Talk it out in team chat; the GM can drop hints there.</li>
+          <li>Watch the <strong>⏳ turns-left</strong> counter — it turns red when you're nearly out of time.</li>
+        </ul>
+      </section>
+
+      <!-- RULES -->
+      <section class="help-card" id="rules">
+        <h2>📐 Rules reference (defaults)</h2>
+        <table class="rules">
+          <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
+          <tr><td>Success threshold</td><td>14</td><td>Total needed for a roll to succeed.</td></tr>
+          <tr><td>Established bonus</td><td>+3</td><td>Added to the roll for Established procedures → effectively 11+ to succeed; others need 14+.</td></tr>
+          <tr><td>Turn limit</td><td>10</td><td>Turns before the attackers win.</td></tr>
+          <tr><td>Cooldown</td><td>3 turns</td><td>How long a used procedure is locked (0 = off).</td></tr>
+          <tr><td>Inject nudge</td><td>3 fails</td><td>After this many consecutive failed rolls, the GM is prompted to play an Inject.</td></tr>
+          <tr><td>Natural 1 / 20</td><td>—</td><td>Automatically plays an Inject.</td></tr>
+        </table>
+        <p style="margin-top:.8rem">Every value above is GM-editable in the panel. A negative inject modifier subtracts
+          from the total — Established bonus included.</p>
+      </section>
+
+      <!-- SOLO -->
+      <section class="help-card" id="solo">
+        <h2>🤖 Solo mode (vs. an AI Incident Master)</h2>
+        <p>No group? Open <code>/solo</code>, enter a name and an optional scenario flavor (e.g. “a regional hospital”),
+          choose a narrator model, and <strong>Begin</strong>. A local LLM plays the Incident Master:</p>
+        <ul>
+          <li>It writes a <strong>unique opening scene</strong> with realistic IOCs (attacker IP, C2 domain, file hash,
+            compromised account, host, CVE, ATT&amp;CK techniques).</li>
+          <li>Each <strong>success</strong> detects the next stage and narrates what you found, hinting at the next step;
+            each <strong>failure</strong> gives a believable real-world reason it stalled.</li>
+          <li>Every incident is freshly randomized, so no two games are alike. It still plays fully even if the LLM is
+            offline (templated narration).</li>
+        </ul>
+        <p>Use <code>↺ New incident</code> to start a fresh scenario any time.</p>
+      </section>
+
+      <p class="help-footer">
+        Backdoors &amp; Breaches is created by Black Hills Information Security and is free under Creative Commons.
+        This is an unofficial local table built around those cards.
+      </p>
+    </div>
+  </body>
+</html>

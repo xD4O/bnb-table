@@ -29,6 +29,7 @@ Players / Viewers:  http://localhost:3000/
   on your network:   http://192.168.1.42:3000/    <- share on Wi-Fi
 Game Master:        http://localhost:3000/gm
 Solo (vs AI IM):    http://localhost:3000/solo
+How-to-Play guide:  http://localhost:3000/help
 Game Master PIN:    7421   (random — set BNB_PIN to fix it)
 Narrator (Ollama):  qwen2.5:7b @ http://localhost:11434  (falls back to templates if offline)
 ```
@@ -46,6 +47,16 @@ Narrator (Ollama):  qwen2.5:7b @ http://localhost:11434  (falls back to template
 ```bash
 BNB_PIN=1234 PORT=8080 BNB_OLLAMA_MODEL=llama3.1:8b npm start
 ```
+
+New to the game? Open **`/help`** for the in-app How-to-Play guide (roles, setup, rules, solo).
+
+## Interface
+
+The UI is a cohesive "SOC command console" theme: glassmorphic panels over an animated grid
+backdrop, the Rajdhani / JetBrains-Mono type pairing, a HUD-style tracker bar, colour-coded
+attack-chain "case file" cards that glow on reveal, a premium animated d20, click-to-enlarge
+cards, and consistent hover/focus states. Responsive down to phones; web fonts degrade
+gracefully to system fonts offline. Pages: `/` (player/viewer), `/gm`, `/solo`, `/help`.
 
 ## Roles & capacity (team mode)
 
@@ -119,7 +130,9 @@ src/game.js            Pure game logic (state machine, redaction, rules, solo mo
 src/narrator.js        Ollama client + offline fallback templates for solo narration
 test/game.test.js      node:test suite (35 tests)
 scripts/fetch-cards.js Downloads official card data + art into assets/
-public/                index.html · app.js (team)   solo.html · solo.js (solo)   styles.css
+src/scenario.js        Randomized per-incident IOC brief for solo narration
+public/                index.html · app.js (team)   solo.html · solo.js (solo)
+                       help.html (How-to-Play guide)   styles.css (design system)
 assets/decks/<Deck>/   carddb.json + card PNGs (git-ignored; regenerate with fetch-cards)
 ```
 

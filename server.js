@@ -190,6 +190,7 @@ const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/" || url === "/gm") return sendFile(res, join(PUBLIC, "index.html"));
   if (url === "/solo") return sendFile(res, join(PUBLIC, "solo.html"));
+  if (url === "/help" || url === "/wiki") return sendFile(res, join(PUBLIC, "help.html"));
   if (url === "/api/models") {
     listModels().then((models) => {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -355,6 +356,7 @@ server.listen(PORT, () => {
   for (const ip of ips) console.log(`  on your network:   http://${ip}:${PORT}/   (share this on Wi-Fi)`);
   console.log(`Game Master:        http://localhost:${PORT}/gm`);
   console.log(`Solo (vs AI IM):    http://localhost:${PORT}/solo`);
+  console.log(`How-to-Play guide:  http://localhost:${PORT}/help`);
   console.log(`Game Master PIN:    ${GM_PIN}   ${process.env.BNB_PIN ? "(from BNB_PIN)" : "(random — set BNB_PIN to fix it)"}`);
   console.log(`Decks available:    ${teamRoom.decks.join(", ")}`);
   console.log(`Narrator (Ollama):  ${narratorInfo.model} @ ${narratorInfo.url}  (falls back to templates if offline)`);
