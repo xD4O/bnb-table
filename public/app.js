@@ -2,6 +2,8 @@
 // the server sends. Un-revealed objective cards simply aren't in the data for
 // players/viewers, so there is nothing to "peek" at in the DOM.
 
+import { loadSettings, renderSettings } from "/settings.js";
+
 const isGmPage = location.pathname === "/gm";
 const SLOTS = ["initial", "pivot", "c2", "persist"];
 const SLOT_LABEL = { initial: "Initial Compromise", pivot: "Pivot & Escalate", c2: "C2 & Exfil", persist: "Persistence" };
@@ -12,6 +14,8 @@ let ws, state = null, joined = false;
 let myJoin = null; // { role, name, pin } — remembered so we can re-join after a reconnect
 let chat = []; // role-filtered chat, updated on its own channel
 let animatedRollTs = null; // so the d20 animation only fires on a genuinely new roll
+let narr = []; // shared AI narrative (team mode), driven by "narrate" events
+let narrSeeded = false, narrSetup = false, awaitingNarr = false;
 
 // ---- connection ------------------------------------------------------------
 
@@ -23,10 +27,16 @@ function connect() {
     if (msg.type === "state") {
       state = msg.state;
       if (state.chat) chat = state.chat;
+      if (!narrSeeded && state.narrative?.length) { narr = state.narrative.map((m) => ({ id: "s" + m.id, text: m.text })); narrSeeded = true; }
       render();
     } else if (msg.type === "chat") {
       chat = msg.messages;
       renderChat();
+    } else if (msg.type === "narrate") {
+      const e = narr.find((x) => x.id === msg.id);
+      if (e) e.text = msg.text; else { narr.push({ id: msg.id, text: msg.text }); narrSeeded = true; }
+      awaitingNarr = false;
+      renderNarrative();
     } else if (msg.type === "error") {
       showError(msg.error);
     }
@@ -119,7 +129,36 @@ function render() {
   renderPlayed();
   renderLog();
   renderChat();
+  renderNarrative();
+  renderGmNarration();
   renderGmPanel();
+}
+
+// ---- AI narration (team) ---------------------------------------------------
+
+function renderNarrative() {
+  const sec = $("narrative-sec");
+  if (!sec) return;
+  sec.hidden = !(narr.length || state.narrationOn);
+  const el = $("narrative");
+  el.innerHTML = narr.map((m) => `<p class="narr">${escapeHtml(m.text)}</p>`).join("");
+  el.scrollTop = el.scrollHeight;
+  $("narrating").hidden = !awaitingNarr;
+}
+
+function renderGmNarration() {
+  const sec = $("gm-narration");
+  if (!sec) return;
+  const isGm = state.you.role === "gm";
+  sec.hidden = !isGm;
+  if (!isGm) return;
+  if (!narrSetup) { renderSettings($("settings-host")); narrSetup = true; }
+  const toggle = $("narr-toggle");
+  if (document.activeElement !== toggle) toggle.checked = !!state.narrationOn;
+  if (!toggle.dataset.wired) {
+    toggle.dataset.wired = "1";
+    toggle.addEventListener("change", () => send({ type: "setNarration", on: toggle.checked, narrator: loadSettings() }));
+  }
 }
 
 // ---- chat ------------------------------------------------------------------
@@ -288,8 +327,10 @@ function renderRollControls() {
     const firstOpen = [...sel.options].find((o) => !o.disabled);
     if (firstOpen) sel.value = firstOpen.value;
   }
-  $("roll-btn").onclick = () =>
+  $("roll-btn").onclick = () => {
+    if (state.narrationOn) { awaitingNarr = true; $("narrating").hidden = false; }
     send({ type: "roll", procedureId: sel.value, modifier: Number($("modifier").value) || 0 });
+  };
 }
 
 function strip(cards) {

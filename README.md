@@ -114,7 +114,11 @@ Below the player minimum the GM can still **Force start** (for testing/demos).
 6. **Consultants:** the GM hands one-time Consultant helps to the team.
 7. **Chat:** Defenders chat on a **team** channel; Viewers chat on a **viewers** channel; the
    GM sees both and can address either. Viewers never see team chat and vice-versa.
-8. **Win** when all 4 attack cards are detected. **Lose** when the turn limit is hit first.
+8. **AI narration (optional):** the GM can flip on **🎙️ AI Narration** (same provider settings
+   as solo) to have an AI Incident Master narrate the table — an opening scene and vivid,
+   IOC-grounded prose on rolls, reveals, injects, and win/lose, streamed live to **everyone**
+   at the table. Off by default; falls back to templates if the provider is unreachable.
+9. **Win** when all 4 attack cards are detected. **Lose** when the turn limit is hit first.
 
 Click any card (objective, procedure, inject, consultant) to enlarge it in a lightbox.
 

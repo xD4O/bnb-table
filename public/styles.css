@@ -367,6 +367,11 @@ section { padding: 1.1rem 1.3rem; }
   font-family: var(--font-mono); font-size: .8rem; animation: fadeIn .3s var(--ease); }
 #log li:first-child { color: var(--ink); }
 
+#gm-narration { background: linear-gradient(180deg, rgba(36,30,14,.5), rgba(18,15,8,.6)) !important; border: 1px solid rgba(240,192,74,.35) !important; }
+#gm-narration h2 { color: var(--gold); }
+.toggle { display: flex; align-items: center; gap: .5rem; color: var(--ink); font-weight: 600; cursor: pointer; margin-bottom: .6rem; }
+.toggle input { width: 1.1rem; height: 1.1rem; accent-color: var(--gold); }
+
 #chatsec { display: flex; flex-direction: column; }
 #chat-scope { text-transform: none; letter-spacing: 0; color: var(--ink-faint); font-weight: 500; }
 #chat-log { list-style: none; margin: 0 0 .55rem; padding: .3rem; height: 30vh; min-height: 160px; overflow-y: auto;

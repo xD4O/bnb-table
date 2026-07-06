@@ -49,8 +49,9 @@ class Room {
     this.deck = this.decks.includes(deck) ? deck : this.decks[0];
     this.game = new Game(loadCatalog(this.deck));
     this.sockets = new Map(); // connId -> ws
-    this.narrSeq = 0; // solo narration entry counter
-    this.narratorCfg = undefined; // solo narrator provider/model config
+    this.narrSeq = 0; // narration entry counter
+    this.narratorCfg = undefined; // narrator provider/model config
+    this.narrationOn = false; // GM-enabled AI narration (team mode)
   }
 
   changeDeck(deck) {
@@ -69,6 +70,7 @@ class Room {
       const role = this.game.roleOf(connId) || "viewer";
       const proj = this.game.project(role);
       proj.you = { role, deck: this.deck, decks: this.decks };
+      proj.narrationOn = this.narrationOn;
       ws.send(JSON.stringify({ type: "state", state: proj }));
     }
   }
@@ -115,8 +117,8 @@ function sanitizeNarrator(n = {}, legacyModel) {
 
 async function narrateInto(room, kind, extra = {}) {
   const g = room.game;
-  const ws = [...room.sockets.values()][0];
   const id = ++room.narrSeq;
+  const toAll = (obj) => { for (const w of room.sockets.values()) send(w, obj); };
   const recent = g.state.narrative.length ? g.state.narrative[g.state.narrative.length - 1].text : "";
   const ctx = {
     chain: chainCtx(g),
@@ -129,16 +131,13 @@ async function narrateInto(room, kind, extra = {}) {
     ...extra,
   };
   let acc = "";
-  await narrate(kind, ctx, (tok) => {
-    acc += tok;
-    if (ws) send(ws, { type: "narrate", id, text: acc, done: false });
-  });
+  await narrate(kind, ctx, (tok) => { acc += tok; toAll({ type: "narrate", id, text: acc, done: false }); });
   g.addNarrative(acc);
-  if (ws) send(ws, { type: "narrate", id, text: acc, done: true });
+  toAll({ type: "narrate", id, text: acc, done: true });
 }
 
-// After a solo roll: narrate the outcome, then any inject, then win/lose.
-async function narrateSoloRoll(room, before, beforeInjects) {
+// After a roll (solo or narrated team game): narrate outcome, then inject, then win/lose.
+async function narrateRoll(room, before, beforeInjects) {
   const g = room.game;
   const roll = g.state.lastRoll;
   const newStage = SLOTS.find((s) => !before[s] && g.state.revealed[s]);
@@ -152,6 +151,14 @@ async function narrateSoloRoll(room, before, beforeInjects) {
   }
   if (g.state.phase === "won") await narrateInto(room, "win");
   else if (g.state.phase === "lost") await narrateInto(room, "lose");
+}
+
+// After a manual GM reveal in a narrated team game.
+async function narrateReveal(room, stage) {
+  const g = room.game;
+  const card = g.byId.get(g.state.objective[stage])?.name;
+  await narrateInto(room, "success", { procedure: g.state.lastRoll?.procedureName || "the team's analysis", stage, card });
+  if (g.state.phase === "won") await narrateInto(room, "win");
 }
 
 function startSoloIncident(room, connId) {
@@ -296,29 +303,63 @@ wss.on("connection", (ws) => {
       case "config":
         r = g.setConfig(msg.config || {}, connId);
         break;
-      case "start":
+      case "setNarration": {
+        if (g.roleOf(connId) !== "gm") { send(ws, { type: "error", error: "Only the Game Master can control narration" }); return; }
+        room.narrationOn = !!msg.on;
+        if (msg.narrator) room.narratorCfg = sanitizeNarrator(msg.narrator);
+        if (room.narrationOn && !room.scenario && g.state.objective.initial)
+          room.scenario = buildScenario(chainCtx(g).map((c) => c.name), room.theme);
+        g.log(room.narrationOn ? "Game Master enabled AI narration" : "Game Master disabled AI narration");
+        room.broadcast();
+        if (room.narrationOn && g.state.phase === "playing" && g.state.narrative.length === 0) narrateInto(room, "intro");
+        return;
+      }
+      case "start": {
         r = g.start({ force: !!msg.force }, connId);
-        break;
-      case "roll": {
-        const before = room.solo ? { ...g.state.revealed } : null;
-        const beforeInjects = room.solo ? g.state.playedInjects.length : 0;
-        r = g.roll({ connId, procedureId: msg.procedureId, modifier: msg.modifier });
-        if (room.solo && r.ok) {
-          room.broadcast(); // show the roll/animation immediately
-          narrateSoloRoll(room, before, beforeInjects); // narration streams in after
+        if (r.ok && room.narrationOn && !room.solo) {
+          room.scenario = buildScenario(chainCtx(g).map((c) => c.name), room.theme);
+          room.broadcast();
+          narrateInto(room, "intro");
           return;
         }
         break;
       }
-      case "reveal":
-        r = g.reveal({ slot: msg.slot }, connId);
+      case "roll": {
+        const track = room.solo || room.narrationOn;
+        const before = track ? { ...g.state.revealed } : null;
+        const beforeInjects = track ? g.state.playedInjects.length : 0;
+        r = g.roll({ connId, procedureId: msg.procedureId, modifier: msg.modifier });
+        if (track && r.ok) {
+          room.broadcast(); // show the roll/animation immediately
+          narrateRoll(room, before, beforeInjects); // narration streams in after
+          return;
+        }
         break;
+      }
+      case "reveal": {
+        const before = room.narrationOn && !room.solo ? { ...g.state.revealed } : null;
+        r = g.reveal({ slot: msg.slot }, connId);
+        if (r.ok && before) {
+          const stage = SLOTS.find((s) => !before[s] && g.state.revealed[s]);
+          room.broadcast();
+          if (stage) narrateReveal(room, stage);
+          return;
+        }
+        break;
+      }
       case "dismissReveal":
         r = g.dismissReveal(connId);
         break;
-      case "playInject":
+      case "playInject": {
         r = g.playInject({ cardId: msg.cardId, modifier: msg.modifier }, connId);
+        if (r.ok && room.narrationOn && !room.solo) {
+          const last = g.state.playedInjects[g.state.playedInjects.length - 1];
+          room.broadcast();
+          narrateInto(room, "inject", { inject: g.byId.get(last)?.name });
+          return;
+        }
         break;
+      }
       case "setModifier":
         r = g.setModifier({ value: msg.value }, connId);
         break;
