@@ -42,9 +42,10 @@ Narrator (Ollama):  qwen2.5:7b @ http://localhost:11434  (falls back to template
 
 The **home page (`/`)** is a launcher: pick **Solo / Game Master / Defender / Viewer**, and
 open the **AI Incident Master settings** — choose **local Ollama** (customizable endpoint,
-lists your installed models) or an **OpenAI-compatible API** (base URL + key + model). Settings
-are stored in your browser and used by Solo mode; it falls back to built-in narration if the
-provider is unreachable.
+lists your installed models) or an **OpenAI-compatible API** with one-click **provider presets**
+(OpenAI, Groq, OpenRouter, Together, DeepSeek, Mistral, local Ollama, or a custom base URL) plus
+an API key and a model picker. Settings are stored in your browser and used by Solo mode; it
+falls back to built-in narration if the provider is unreachable.
 
 ### Environment variables
 

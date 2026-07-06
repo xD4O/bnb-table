@@ -4,6 +4,19 @@
 // sent to this local server, which forwards it to the provider.
 
 const KEY = "bnb.narrator";
+
+// One-click base URLs for common OpenAI-compatible providers.
+export const PRESETS = [
+  { name: "Custom / other", url: "" },
+  { name: "OpenAI", url: "https://api.openai.com/v1" },
+  { name: "Groq", url: "https://api.groq.com/openai/v1" },
+  { name: "OpenRouter", url: "https://openrouter.ai/api/v1" },
+  { name: "Together AI", url: "https://api.together.xyz/v1" },
+  { name: "DeepSeek", url: "https://api.deepseek.com/v1" },
+  { name: "Mistral", url: "https://api.mistral.ai/v1" },
+  { name: "Local Ollama (OpenAI-compat)", url: "http://localhost:11434/v1" },
+];
+
 const DEFAULTS = {
   provider: "ollama",
   ollamaUrl: "http://localhost:11434",
@@ -43,6 +56,7 @@ export function renderSettings(container) {
         <label>Ollama endpoint<input id="set-ollamaUrl" value="${esc(s.ollamaUrl)}" placeholder="http://localhost:11434" /></label>
       </div>
       <div class="set-panel" data-panel="api" hidden>
+        <label>Provider preset<select id="set-preset">${PRESETS.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join("")}</select></label>
         <label>API base URL <span class="hint">(OpenAI-compatible)</span><input id="set-apiBaseUrl" value="${esc(s.apiBaseUrl)}" placeholder="https://api.openai.com/v1" /></label>
         <label>API key<input id="set-apiKey" type="password" value="${esc(s.apiKey)}" placeholder="sk-… (stored only in this browser)" /></label>
       </div>
@@ -69,8 +83,22 @@ export function renderSettings(container) {
 
   const bind = (id, field) => { const el = $(id); if (el) el.addEventListener("input", () => put({ [field]: el.value.trim() })); };
   bind("set-ollamaUrl", "ollamaUrl");
-  bind("set-apiBaseUrl", "apiBaseUrl");
   bind("set-apiKey", "apiKey");
+
+  // preset <-> base URL sync
+  const preset = $("set-preset");
+  const matchPreset = (url) => { const i = PRESETS.findIndex((p) => p.url && p.url === url); return i >= 0 ? i : 0; };
+  preset.value = String(matchPreset(s.apiBaseUrl));
+  preset.addEventListener("change", () => {
+    const p = PRESETS[Number(preset.value)];
+    if (p && p.url) { $("set-apiBaseUrl").value = p.url; put({ apiBaseUrl: p.url }); loadModels(); }
+    else $("set-apiBaseUrl").focus();
+  });
+  $("set-apiBaseUrl").addEventListener("input", () => {
+    const v = $("set-apiBaseUrl").value.trim();
+    put({ apiBaseUrl: v });
+    preset.value = String(matchPreset(v)); // reflect manual edits back to the preset select
+  });
   $("set-model").addEventListener("change", () => put({ model: $("set-model").value }));
   $("set-load").addEventListener("click", loadModels);
 
