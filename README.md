@@ -30,14 +30,21 @@ npm start
 On startup the server prints all URLs, the Game Master PIN, and the narrator model:
 
 ```
-Players / Viewers:  http://localhost:3000/
+Home / launcher:    http://localhost:3000/
   on your network:   http://192.168.1.42:3000/    <- share on Wi-Fi
+Players / Viewers:  http://localhost:3000/play
 Game Master:        http://localhost:3000/gm
 Solo (vs AI IM):    http://localhost:3000/solo
 How-to-Play guide:  http://localhost:3000/help
 Game Master PIN:    7421   (random — set BNB_PIN to fix it)
 Narrator (Ollama):  qwen2.5:7b @ http://localhost:11434  (falls back to templates if offline)
 ```
+
+The **home page (`/`)** is a launcher: pick **Solo / Game Master / Defender / Viewer**, and
+open the **AI Incident Master settings** — choose **local Ollama** (customizable endpoint,
+lists your installed models) or an **OpenAI-compatible API** (base URL + key + model). Settings
+are stored in your browser and used by Solo mode; it falls back to built-in narration if the
+provider is unreachable.
 
 ### Environment variables
 
@@ -46,8 +53,13 @@ Narrator (Ollama):  qwen2.5:7b @ http://localhost:11434  (falls back to template
 | `PORT` | `3000` | HTTP/WS port |
 | `BNB_PIN` | random 4-digit | fixed Game Master PIN |
 | `BNB_DECK` | `CoreV3.1` | starting deck |
-| `BNB_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint for solo narration |
-| `BNB_OLLAMA_MODEL` | `qwen2.5:7b` | model used to narrate solo mode |
+| `BNB_OLLAMA_URL` | `http://localhost:11434` | default Ollama endpoint for solo narration |
+| `BNB_OLLAMA_MODEL` | `qwen2.5:7b` | default narrator model |
+| `BNB_API_URL` | `https://api.openai.com/v1` | default base URL for the OpenAI-compatible API provider |
+| `BNB_API_KEY` | — | default API key for the API provider (usually set per-browser in Settings instead) |
+
+The narrator provider/model/endpoint/key are normally chosen in the in-app **Settings** (home
+page or the Solo screen) and persist per-browser; these env vars only supply defaults.
 
 ```bash
 BNB_PIN=1234 PORT=8080 BNB_OLLAMA_MODEL=llama3.1:8b npm start
@@ -61,7 +73,8 @@ The UI is a cohesive "SOC command console" theme: glassmorphic panels over an an
 backdrop, the Rajdhani / JetBrains-Mono type pairing, a HUD-style tracker bar, colour-coded
 attack-chain "case file" cards that glow on reveal, a premium animated d20, click-to-enlarge
 cards, and consistent hover/focus states. Responsive down to phones; web fonts degrade
-gracefully to system fonts offline. Pages: `/` (player/viewer), `/gm`, `/solo`, `/help`.
+gracefully to system fonts offline. Pages: `/` (launcher + settings), `/play` (player/viewer),
+`/gm`, `/solo`, `/help`.
 
 ## Roles & capacity (team mode)
 
@@ -137,6 +150,7 @@ test/game.test.js      node:test suite (35 tests)
 scripts/fetch-cards.js Downloads official card data + art into assets/
 src/scenario.js        Randomized per-incident IOC brief for solo narration
 public/                index.html · app.js (team)   solo.html · solo.js (solo)
+                       home.html (launcher)   settings.js (shared narrator settings)
                        help.html (How-to-Play guide)   styles.css (design system)
 assets/decks/<Deck>/   carddb.json + card PNGs (git-ignored; regenerate with fetch-cards)
 ```

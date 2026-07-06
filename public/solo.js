@@ -1,6 +1,8 @@
 // Solo client: one analyst vs the AI Incident Master. Reuses the same server/game
 // projection; the server auto-adjudicates detection (chain order) and streams narration.
 
+import { loadSettings, renderSettings } from "/settings.js";
+
 const SLOTS = ["initial", "pivot", "c2", "persist"];
 const SLOT_LABEL = { initial: "Initial Compromise", pivot: "Pivot & Escalate", c2: "C2 & Exfil", persist: "Persistence" };
 const $ = (id) => document.getElementById(id);
@@ -35,7 +37,7 @@ function connect() {
 const sendRaw = (o) => ws.readyState === 1 && ws.send(JSON.stringify(o));
 
 function sendBegin() {
-  sendRaw({ type: "joinSolo", name: $("name").value.trim() || "Analyst", theme: $("theme").value.trim(), model: $("model").value || undefined });
+  sendRaw({ type: "joinSolo", name: $("name").value.trim() || "Analyst", theme: $("theme").value.trim(), narrator: loadSettings() });
 }
 
 function show() { $("join").hidden = true; $("board").hidden = false; }
@@ -194,13 +196,8 @@ $("new-incident").addEventListener("click", () => {
   sendRaw({ type: "newIncident" });
 });
 
-// populate the Incident Master model picker from Ollama (graceful if none)
-fetch("/api/models").then((r) => r.json()).then(({ models, default: def }) => {
-  const sel = $("model");
-  const list = models && models.length ? models : (def ? [def] : []);
-  if (!list.length) { sel.innerHTML = `<option value="">built-in fallback (Ollama offline)</option>`; return; }
-  sel.innerHTML = list.map((m) => `<option value="${m}" ${m === def ? "selected" : ""}>${m}</option>`).join("");
-}).catch(() => { $("model").innerHTML = `<option value="">default</option>`; });
+// AI Incident Master settings (provider / endpoint / model), shared with the launcher
+renderSettings(document.getElementById("settings-host"));
 
 // lightbox
 (function lightbox() {

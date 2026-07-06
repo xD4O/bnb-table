@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backdoors &amp; Breaches — Play</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="launch-wrap">
+      <div class="hero">
+        <h1>Backdoors &amp; Breaches</h1>
+        <p>Incident-response card game — play solo against an AI Incident Master, or run a table over your network.</p>
+      </div>
+
+      <h2 class="launch-h">Choose how to play</h2>
+      <div class="mode-grid">
+        <a class="mode-card solo" href="/solo">
+          <div class="ico">🤖</div>
+          <div class="t">Solo</div>
+          <p>You vs. an AI Incident Master that narrates the whole incident.</p>
+        </a>
+        <a class="mode-card gm" href="/gm">
+          <div class="ico">🎴</div>
+          <div class="t">Game Master</div>
+          <p>Run the table. You hold the hidden attack chain. <span class="pill">PIN</span></p>
+        </a>
+        <a class="mode-card def" href="/play">
+          <div class="ico">🛡️</div>
+          <div class="t">Defender</div>
+          <p>Join the blue team — roll dice and hunt the intruder.</p>
+        </a>
+        <a class="mode-card view" href="/play?role=viewer">
+          <div class="ico">👁️</div>
+          <div class="t">Viewer</div>
+          <p>Spectate the board live. Great for a projector or stream.</p>
+        </a>
+      </div>
+
+      <section class="launch-settings">
+        <h2>⚙️ Solo AI Incident Master — settings</h2>
+        <p class="muted">Used by <strong>Solo</strong> mode. Choose a local Ollama model or an OpenAI-compatible API.
+          Falls back to built-in narration if unreachable.</p>
+        <div id="settings-host"></div>
+      </section>
+
+      <p class="help-footer"><a href="/help">📖 How to play</a> · Unofficial local table for Black Hills InfoSec's Backdoors &amp; Breaches (CC).</p>
+    </div>
+
+    <script type="module">
+      import { renderSettings } from "/settings.js";
+      renderSettings(document.getElementById("settings-host"));
+    </script>
+  </body>
+</html>

@@ -50,7 +50,7 @@ class Room {
     this.game = new Game(loadCatalog(this.deck));
     this.sockets = new Map(); // connId -> ws
     this.narrSeq = 0; // solo narration entry counter
-    this.model = undefined; // solo narrator model override
+    this.narratorCfg = undefined; // solo narrator provider/model config
   }
 
   changeDeck(deck) {
@@ -100,6 +100,19 @@ function chainCtx(game) {
 }
 
 // Stream one narration entry token-by-token to the solo player, then commit it to state.
+// Keep only known narrator fields; never log/broadcast the API key.
+function sanitizeNarrator(n = {}, legacyModel) {
+  n = n || {};
+  const s = (v, len) => (v ? String(v).slice(0, len) : undefined);
+  return {
+    provider: n.provider === "api" ? "api" : "ollama",
+    ollamaUrl: s(n.ollamaUrl, 200),
+    apiBaseUrl: s(n.apiBaseUrl, 200),
+    apiKey: s(n.apiKey, 500),
+    model: s(n.model || legacyModel, 120),
+  };
+}
+
 async function narrateInto(room, kind, extra = {}) {
   const g = room.game;
   const ws = [...room.sockets.values()][0];
@@ -112,7 +125,7 @@ async function narrateInto(room, kind, extra = {}) {
     recent,
     nonce: Math.floor(Math.random() * 1e6),
     turn: g.state.turn,
-    model: room.model,
+    narrator: room.narratorCfg,
     ...extra,
   };
   let acc = "";
@@ -188,14 +201,23 @@ function resolveSafe(root, urlPath) {
 
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
-  if (url === "/" || url === "/gm") return sendFile(res, join(PUBLIC, "index.html"));
+  if (url === "/") return sendFile(res, join(PUBLIC, "home.html"));
+  if (url === "/gm" || url === "/play") return sendFile(res, join(PUBLIC, "index.html"));
   if (url === "/solo") return sendFile(res, join(PUBLIC, "solo.html"));
   if (url === "/help" || url === "/wiki") return sendFile(res, join(PUBLIC, "help.html"));
   if (url === "/api/models") {
-    listModels().then((models) => {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ models, default: narratorInfo.model }));
-    });
+    const respond = (opts) =>
+      listModels(opts).then((models) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ models, default: narratorInfo.model }));
+      });
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => { let o = {}; try { o = JSON.parse(body || "{}"); } catch {} respond(o); });
+    } else {
+      respond({});
+    }
     return;
   }
   if (url.startsWith("/assets/")) {
@@ -236,7 +258,7 @@ wss.on("connection", (ws) => {
       const sr = new Room(DEFAULT_DECK);
       sr.solo = true;
       sr.theme = String(msg.theme || "").slice(0, 120);
-      if (msg.model) sr.model = String(msg.model).slice(0, 100);
+      sr.narratorCfg = sanitizeNarrator(msg.narrator, msg.model);
       sr.sockets.set(connId, ws);
       soloRooms.set(connId, sr);
       sr.game.join(`sys-${connId}`, { name: "Incident Master", role: "gm" });
@@ -352,8 +374,9 @@ function lanAddresses() {
 server.listen(PORT, () => {
   const ips = lanAddresses();
   console.log("\n=== Backdoors & Breaches — local server ===");
-  console.log(`Players / Viewers:  http://localhost:${PORT}/`);
+  console.log(`Home / launcher:    http://localhost:${PORT}/`);
   for (const ip of ips) console.log(`  on your network:   http://${ip}:${PORT}/   (share this on Wi-Fi)`);
+  console.log(`Players / Viewers:  http://localhost:${PORT}/play`);
   console.log(`Game Master:        http://localhost:${PORT}/gm`);
   console.log(`Solo (vs AI IM):    http://localhost:${PORT}/solo`);
   console.log(`How-to-Play guide:  http://localhost:${PORT}/help`);

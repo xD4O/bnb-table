@@ -452,8 +452,56 @@ table.rules th { color: var(--ink); font-family: var(--font-ui); letter-spacing:
 table.rules td { color: var(--ink-dim); }
 table.rules td:first-child { color: var(--ink); font-weight: 600; }
 
+/* =====================================================================
+   LAUNCHER (home) + SETTINGS
+   ===================================================================== */
+.launch-wrap { max-width: 940px; margin: 0 auto; padding: 3rem 1.3rem 4rem; position: relative; z-index: 1; }
+.launch-wrap .hero { text-align: center; margin-bottom: 2.2rem; }
+.launch-wrap .hero h1 { font-size: 2.7rem; font-weight: 700; letter-spacing: .04em; margin: 0 0 .4rem;
+  background: linear-gradient(180deg, #fff, #9fd8ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(56,189,248,.25); }
+.launch-wrap .hero p { color: var(--ink-dim); margin: 0 auto; max-width: 620px; }
+.launch-h { text-align: center; margin-bottom: 1rem; }
+
+.mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.4rem; }
+.mode-card { text-decoration: none; color: var(--ink); display: block; padding: 1.3rem 1.2rem; border-radius: var(--r-lg);
+  background: var(--surface); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--hairline); border-top: 3px solid var(--mc, var(--accent)); box-shadow: var(--shadow-1);
+  transition: transform var(--med), box-shadow var(--med), border-color var(--med); position: relative; overflow: hidden; }
+.mode-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-3); border-color: var(--mc, var(--accent)); }
+.mode-card .ico { font-size: 2rem; line-height: 1; }
+.mode-card .t { font-family: var(--font-ui); font-weight: 700; font-size: 1.35rem; letter-spacing: .03em; margin: .5rem 0 .3rem; }
+.mode-card p { color: var(--ink-faint); font-size: .9rem; margin: 0; }
+.mode-card.solo { --mc: var(--gold); } .mode-card.gm { --mc: var(--gold); }
+.mode-card.def { --mc: var(--accent); } .mode-card.view { --mc: var(--c-persist); }
+
+.launch-settings { background: var(--surface); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--hairline); border-radius: var(--r-lg); padding: 1.4rem 1.6rem; box-shadow: var(--shadow-1); }
+.launch-settings h2 { color: var(--gold); }
+.muted { color: var(--ink-faint); font-size: .88rem; margin: 0 0 1rem; }
+
+/* settings form (shared) */
+.settings { display: flex; flex-direction: column; gap: .8rem; }
+.seg { display: inline-flex; background: rgba(8,12,20,.5); border: 1px solid var(--hairline); border-radius: 999px; padding: .2rem; gap: .2rem; align-self: flex-start; }
+.seg-btn { border: none; background: transparent; color: var(--ink-dim); padding: .4rem .9rem; border-radius: 999px; font-weight: 600; font-size: .85rem; cursor: pointer; transition: all var(--fast); }
+.seg-btn.active { background: linear-gradient(180deg, var(--accent), var(--accent-2)); color: #04121d; box-shadow: 0 2px 10px rgba(56,120,230,.35); }
+.set-panel { display: flex; flex-direction: column; gap: .6rem; }
+.set-panel label { display: flex; flex-direction: column; gap: .3rem; color: var(--ink-dim); font-size: .76rem; text-transform: uppercase; letter-spacing: .09em; font-weight: 600; }
+.set-panel input { text-transform: none; letter-spacing: 0; font-weight: 400; font-family: var(--font-mono); font-size: .85rem; }
+.set-panel .hint { text-transform: none; letter-spacing: 0; color: var(--ink-faint); font-weight: 400; }
+.model-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.model-row select { min-width: 220px; }
+.set-status { font-family: var(--font-mono); font-size: .78rem; color: var(--ink-faint); }
+.set-status.ok-txt { color: var(--ok); } .set-status.warn-txt { color: var(--warn); }
+.set-block { margin: .8rem 0; padding: .8rem; border: 1px solid var(--hairline); border-radius: var(--r); background: rgba(8,12,20,.35); }
+.set-head { font-family: var(--font-ui); font-weight: 600; letter-spacing: .04em; color: var(--gold); margin-bottom: .5rem; font-size: .95rem; }
+.launch-settings + .help-footer, .help-footer a { color: var(--ink-dim); }
+.help-footer a { text-decoration: none; border-bottom: 1px dashed var(--hairline-strong); }
+.help-footer a:hover { color: var(--accent); }
+
 @media (max-width: 560px) {
   .join-card { padding: 1.5rem 1.2rem; }
   #topbar { padding: .6rem .9rem; }
   .brand { font-size: 1rem; }
+  .launch-wrap .hero h1 { font-size: 2rem; }
 }

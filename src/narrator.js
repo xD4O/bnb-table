@@ -118,68 +118,110 @@ function fallback(kind, ctx = {}) {
   return rpick(arr);
 }
 
-// Narrate a moment. If `onToken(textChunk)` is supplied, streams from Ollama and calls
-// it per chunk (typewriter); returns the full text. ctx.model overrides the default model.
+// Resolve the effective provider config from ctx.narrator (+ env fallbacks).
+function providerCfg(ctx = {}) {
+  const n = ctx.narrator || {};
+  return {
+    provider: n.provider === "api" ? "api" : "ollama",
+    ollamaUrl: (n.ollamaUrl || OLLAMA_URL).replace(/\/+$/, ""),
+    apiBaseUrl: (n.apiBaseUrl || process.env.BNB_API_URL || "https://api.openai.com/v1").replace(/\/+$/, ""),
+    apiKey: n.apiKey || process.env.BNB_API_KEY || "",
+    model: n.model || ctx.model || MODEL,
+  };
+}
+
+// Narrate a moment. If `onToken(textChunk)` is supplied, streams from the provider and calls
+// it per chunk (typewriter); returns the full text. Uses ctx.narrator to pick Ollama or an
+// OpenAI-compatible API. Falls back to templated flavor text on any failure.
 export async function narrate(kind, ctx = {}, onToken) {
   const streaming = typeof onToken === "function";
+  const cfg = providerCfg(ctx);
   try {
-    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: ctx.model || MODEL,
-        system: SYSTEM,
-        prompt: buildPrompt(kind, ctx),
-        stream: streaming,
-        // random seed + higher temperature/top_p + repeat penalty so no two games narrate alike
-        options: { temperature: 0.95, top_p: 0.95, repeat_penalty: 1.2, seed: ri(1, 2_000_000_000), num_predict: 256 },
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
-    if (!res.ok) throw new Error(`ollama ${res.status}`);
-
-    if (!streaming) {
-      const data = await res.json();
-      return (data.response || "").trim() || fallback(kind, ctx);
-    }
-
-    // Stream NDJSON: each line is {response, done}.
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "", full = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let nl;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line) continue;
-        try {
-          const j = JSON.parse(line);
-          if (j.response) { full += j.response; onToken(j.response); }
-        } catch {}
-      }
-    }
-    const text = full.trim();
-    if (text) return text;
+    const text = cfg.provider === "api"
+      ? await narrateApi(cfg, kind, ctx, onToken, streaming)
+      : await narrateOllama(cfg, kind, ctx, onToken, streaming);
+    if (text && text.trim()) return text.trim();
     const fb = fallback(kind, ctx);
-    onToken(fb);
+    if (streaming) onToken(fb);
     return fb;
   } catch {
     const fb = fallback(kind, ctx);
-    if (streaming) onToken(fb); // still surface it in the typewriter pane
+    if (streaming) onToken(fb);
     return fb;
   }
 }
 
-export async function listModels() {
+async function narrateOllama(cfg, kind, ctx, onToken, streaming) {
+  const res = await fetch(`${cfg.ollamaUrl}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: cfg.model, system: SYSTEM, prompt: buildPrompt(kind, ctx), stream: streaming,
+      options: { temperature: 0.95, top_p: 0.95, repeat_penalty: 1.2, seed: ri(1, 2_000_000_000), num_predict: 256 },
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) throw new Error(`ollama ${res.status}`);
+  if (!streaming) return (await res.json()).response || "";
+  return readLines(res, (line) => { const j = JSON.parse(line); return j.response || ""; }, onToken);
+}
+
+async function narrateApi(cfg, kind, ctx, onToken, streaming) {
+  const res = await fetch(`${cfg.apiBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}) },
+    body: JSON.stringify({
+      model: cfg.model, stream: streaming, temperature: 0.95, top_p: 0.95,
+      messages: [{ role: "system", content: SYSTEM }, { role: "user", content: buildPrompt(kind, ctx) }],
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) throw new Error(`api ${res.status}`);
+  if (!streaming) return (await res.json()).choices?.[0]?.message?.content || "";
+  // OpenAI-style SSE: lines "data: {json}" with choices[0].delta.content, ending "data: [DONE]".
+  return readLines(res, (line) => {
+    if (!line.startsWith("data:")) return "";
+    const payload = line.slice(5).trim();
+    if (payload === "[DONE]") return "";
+    return JSON.parse(payload).choices?.[0]?.delta?.content || "";
+  }, onToken);
+}
+
+// Shared line-delimited stream reader; `extract(line)->chunk` pulls text from each line.
+async function readLines(res, extract, onToken) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line) continue;
+      try { const chunk = extract(line); if (chunk) { full += chunk; onToken(chunk); } } catch {}
+    }
+  }
+  return full;
+}
+
+// List models for a provider. opts: { provider, ollamaUrl, apiBaseUrl, apiKey }.
+export async function listModels(opts = {}) {
+  const cfg = providerCfg({ narrator: opts });
   try {
-    const res = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(3000) });
+    if (cfg.provider === "api") {
+      const res = await fetch(`${cfg.apiBaseUrl}/models`, {
+        headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {},
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) return [];
+      return ((await res.json()).data || []).map((m) => m.id).sort();
+    }
+    const res = await fetch(`${cfg.ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return [];
-    const d = await res.json();
-    return (d.models || []).map((m) => m.name);
+    return ((await res.json()).models || []).map((m) => m.name);
   } catch {
     return [];
   }
